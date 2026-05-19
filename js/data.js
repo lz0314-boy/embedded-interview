@@ -1450,10 +1450,4 @@ void reverse_words(char *s) {
   }
 ];
 
-const EMBEDDED_DATA = [
-  ...DATA_PART1,
-  ...DATA_PART1B,
-  ...DATA_PART2,
-  ...DATA_PART3,
-  ...DATA_RESUME
-];
+// EMBEDDED_DATA 在 data_resume.js 末尾定义，因此处已能引用所有 DATA_PART 和 DATA_RESUME
