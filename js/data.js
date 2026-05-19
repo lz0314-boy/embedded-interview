@@ -1454,5 +1454,6 @@ const EMBEDDED_DATA = [
   ...DATA_PART1,
   ...DATA_PART1B,
   ...DATA_PART2,
-  ...DATA_PART3
+  ...DATA_PART3,
+  ...DATA_RESUME
 ];
