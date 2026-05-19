@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嵌入式八股文 - 面试学习一站通</title>
+  <meta name="description" content="嵌入式软件工程师面试知识库：C语言、RTOS、Linux、硬件外设、通信协议、ARM架构、UDS诊断、AUTOSAR、大厂面试真题、手写代码题">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/data.js"></script>
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+
+  <!-- 移动端遮罩 -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- ============ 侧边栏导航 ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>嵌入式八股文</h1>
+      <div class="subtitle">Embedded Interview Guide</div>
+    </div>
+    <div class="sidebar-stats">
+      <span>总题目 <strong id="totalCount">0</strong></span>
+      <span>已掌握 <strong id="reviewedCount">0</strong></span>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <!-- 由 app.js 动态渲染 -->
+    </nav>
+  </aside>
+
+  <!-- ============ 主内容区 ============ -->
+  <div class="main-content">
+
+    <!-- 顶部工具栏 -->
+    <header class="top-bar">
+      <button class="menu-toggle" id="menuToggle" aria-label="菜单">☰</button>
+
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="搜索知识点、面试题、关键词...">
+        <button class="search-clear" id="searchClear" aria-label="清除">✕</button>
+        <span class="search-hint" id="searchHint">Ctrl+K</span>
+      </div>
+
+      <div class="toolbar-actions">
+        <button class="btn" id="expandAllBtn"><span>展开全部</span></button>
+        <button class="btn" id="collapseAllBtn"><span>折叠全部</span></button>
+        <button class="btn btn-icon" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">🌙</button>
+      </div>
+
+      <div class="progress-indicator" id="progressIndicator">
+        <span id="progressText">0%</span>
+        <div class="bar"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+    </header>
+
+    <!-- 内容区 -->
+    <main class="content-area" id="contentArea">
+      <!-- 由 app.js 动态渲染 -->
+    </main>
+
+  </div>
+
+  <!-- 返回顶部 -->
+  <button class="back-to-top" id="backToTop" aria-label="返回顶部" title="返回顶部">↑</button>
+
+</body>
+</html>
