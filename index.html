@@ -45,6 +45,7 @@
       </div>
 
       <div class="toolbar-actions">
+        <button class="btn accent" id="addKnowledgeBtn"><span>+ 添加</span></button>
         <button class="btn" id="expandAllBtn"><span>展开全部</span></button>
         <button class="btn" id="collapseAllBtn"><span>折叠全部</span></button>
         <button class="btn btn-icon" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">🌙</button>
@@ -65,6 +66,40 @@
 
   <!-- 返回顶部 -->
   <button class="back-to-top" id="backToTop" aria-label="返回顶部" title="返回顶部">↑</button>
+
+  <!-- ============ 添加知识模态框 ============ -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <span id="modalTitle">添加新知识点</span>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>所属分类</label>
+          <select id="formCategory"></select>
+        </div>
+        <div class="form-group">
+          <label>问题</label>
+          <input type="text" id="formQuestion" placeholder="输入面试问题...">
+        </div>
+        <div class="form-group">
+          <label>答案 <span class="hint">（支持HTML：&lt;p&gt;&lt;ul&gt;&lt;pre&gt;&lt;table&gt;等标签）</span></label>
+          <textarea id="formAnswer" placeholder="输入详细答案...&#10;&#10;可用HTML标签格式化：&#10;&lt;p&gt;段落&lt;/p&gt;&#10;&lt;pre&gt;&lt;code class=&quot;language-c&quot;&gt;代码块&lt;/code&gt;&lt;/pre&gt;&#10;&lt;ul&gt;&lt;li&gt;列表项&lt;/li&gt;&lt;/ul&gt;"></textarea>
+        </div>
+        <div class="form-group">
+          <label>标签 <span class="hint">（用逗号分隔，如：高频, ARM, FreeRTOS）</span></label>
+          <input type="text" id="formTags" placeholder="高频, 基础">
+        </div>
+        <input type="hidden" id="formEditId">
+        <div class="form-actions">
+          <button class="btn btn-sm danger" id="formDeleteBtn" style="display:none;margin-right:auto;">删除</button>
+          <button class="btn" id="formCancelBtn">取消</button>
+          <button class="btn accent" id="formSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

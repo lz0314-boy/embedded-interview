@@ -917,3 +917,87 @@ body {
   .qa-card-answer { padding-left: 20px; }
   body { font-size: 12px; }
 }
+
+/* ---------- Modal / Add Knowledge ---------- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  width: 90vw;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-color);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.modal-close {
+  background: none; border: none;
+  font-size: 1.3rem; cursor: pointer;
+  color: var(--text-tertiary); padding: 4px 8px;
+}
+.modal-close:hover { color: var(--text-primary); }
+.modal-body { padding: 18px 22px; }
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block; font-size: 0.82rem; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 4px;
+}
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem; font-family: inherit;
+  background: var(--bg-secondary); color: var(--text-primary);
+  outline: none; transition: border-color var(--transition-fast);
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+.form-group textarea { min-height: 160px; resize: vertical; font-family: "JetBrains Mono","Consolas",monospace; font-size: 0.82rem; }
+.form-group .hint { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 3px; }
+.form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+/* user-added card actions */
+.qa-card-actions { display: flex; gap: 8px; }
+.btn-sm {
+  font-size: 0.72rem; padding: 3px 10px;
+  border: 1.5px solid var(--border-color); border-radius: 14px;
+  background: transparent; cursor: pointer;
+  color: var(--text-tertiary); font-family: inherit;
+  transition: all var(--transition-fast);
+}
+.btn-sm:hover { color: var(--text-primary); border-color: var(--text-tertiary); }
+.btn-sm.danger:hover { color: #dc2626; border-color: #dc2626; background: #fef2f2; }
+[data-theme="dark"] .btn-sm.danger:hover { background: #3b1515; }
+
+/* user-added indicator */
+.user-badge {
+  display: inline-block; font-size: 0.6rem; font-weight: 700;
+  background: #fef3c7; color: #92400e; padding: 1px 7px;
+  border-radius: 10px; margin-left: 4px; vertical-align: middle;
+}
+[data-theme="dark"] .user-badge { background: #451a03; color: #fde68a; }
+
+@media (max-width: 768px) {
+  .modal { width: 95vw; max-width: none; max-height: 90vh; }
+  .modal-body { padding: 14px 16px; }
+}

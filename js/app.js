@@ -77,16 +77,135 @@
   applyTheme(savedTheme);
 
   // ============ All questions flat list ============
+  function getBuiltInCategories() {
+    if (typeof EMBEDDED_DATA === 'undefined') return [];
+    return EMBEDDED_DATA.map(cat => ({ id: cat.id, name: cat.name, icon: cat.icon }));
+  }
+
   function getAllQuestions() {
     const items = [];
-    if (typeof EMBEDDED_DATA === 'undefined') return items;
-    EMBEDDED_DATA.forEach(cat => {
-      (cat.questions || []).forEach(q => {
-        items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon });
+    if (typeof EMBEDDED_DATA !== 'undefined') {
+      EMBEDDED_DATA.forEach(cat => {
+        (cat.questions || []).forEach(q => {
+          items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon, source: 'builtin' });
+        });
       });
+    }
+    // 合并用户添加的条目
+    const userItems = getUserItems();
+    userItems.forEach(q => {
+      const cat = getBuiltInCategories().find(c => c.id === q.categoryId);
+      items.push({ ...q, categoryName: cat ? cat.name : q.categoryId, categoryIcon: cat ? cat.icon : '📝', source: 'user' });
     });
     return items;
   }
+
+  // ============ User Items (localStorage) ============
+  function getUserItems() { return storage.get('user_items', []); }
+  function saveUserItems(items) { storage.set('user_items', items); }
+
+  function addUserItem(item) {
+    const items = getUserItems();
+    item.id = 'user-' + Date.now();
+    items.push(item);
+    saveUserItems(items);
+  }
+
+  function updateUserItem(id, updates) {
+    const items = getUserItems();
+    const idx = items.findIndex(it => it.id === id);
+    if (idx >= 0) { Object.assign(items[idx], updates); saveUserItems(items); }
+  }
+
+  function deleteUserItem(id) {
+    const items = getUserItems().filter(it => it.id !== id);
+    saveUserItems(items);
+    reviewedSet.delete(id);
+    saveReviewed();
+  }
+
+  // ============ Modal ============
+  const modalOverlay = $('#modalOverlay');
+  const modalTitle = $('#modalTitle');
+  const formCategory = $('#formCategory');
+  const formQuestion = $('#formQuestion');
+  const formAnswer = $('#formAnswer');
+  const formTags = $('#formTags');
+  const formEditId = $('#formEditId');
+  const formDeleteBtn = $('#formDeleteBtn');
+  const addKnowledgeBtn = $('#addKnowledgeBtn');
+
+  function populateCategoryDropdown() {
+    const cats = getBuiltInCategories();
+    formCategory.innerHTML = cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+  }
+
+  function openAddModal(presetCatId) {
+    populateCategoryDropdown();
+    if (presetCatId) formCategory.value = presetCatId;
+    modalTitle.textContent = '添加新知识点';
+    formQuestion.value = ''; formAnswer.value = ''; formTags.value = '';
+    formEditId.value = ''; formDeleteBtn.style.display = 'none';
+    modalOverlay.classList.add('show');
+    formQuestion.focus();
+  }
+
+  function openEditModal(id) {
+    populateCategoryDropdown();
+    const item = getUserItems().find(it => it.id === id);
+    if (!item) return;
+    modalTitle.textContent = '编辑知识点';
+    formCategory.value = item.categoryId || '';
+    formQuestion.value = item.q || '';
+    formAnswer.value = item.a || '';
+    formTags.value = (item.tags || []).join(', ');
+    formEditId.value = id;
+    formDeleteBtn.style.display = '';
+    modalOverlay.classList.add('show');
+  }
+
+  function closeModal() { modalOverlay.classList.remove('show'); }
+
+  function saveFromModal() {
+    const q = formQuestion.value.trim();
+    const a = formAnswer.value.trim();
+    if (!q || !a) { alert('问题和答案不能为空'); return; }
+    const data = {
+      categoryId: formCategory.value,
+      q, a,
+      tags: formTags.value.split(',').map(t => t.trim()).filter(Boolean)
+    };
+    const editId = formEditId.value;
+    if (editId) { updateUserItem(editId, data); } else { addUserItem(data); }
+    closeModal();
+    // 刷新当前视图
+    renderSidebar();
+    expandedCards.clear();
+    renderContent(getFilteredQuestions());
+  }
+
+  function handleDeleteFromModal() {
+    const id = formEditId.value;
+    if (!id || !confirm('确定要删除这条知识点吗？此操作不可撤销。')) return;
+    deleteUserItem(id);
+    closeModal();
+    renderSidebar();
+    expandedCards.clear();
+    renderContent(getFilteredQuestions());
+  }
+
+  // Modal event bindings
+  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+  $('#modalClose').addEventListener('click', closeModal);
+  $('#formCancelBtn').addEventListener('click', closeModal);
+  $('#formSaveBtn').addEventListener('click', saveFromModal);
+  formDeleteBtn.addEventListener('click', handleDeleteFromModal);
+  addKnowledgeBtn.addEventListener('click', () => openAddModal(currentCategory));
+
+  // Keyboard shortcut for modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalOverlay.classList.contains('show')) { closeModal(); e.stopPropagation(); }
+  });
 
   // ============ Search ============
   function searchQuestions(query) {
@@ -103,8 +222,16 @@
 
   function getQuestionsByCategory(catId) {
     const cat = (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.find(c => c.id === catId) : null;
-    if (!cat) return [];
-    return (cat.questions || []).map(q => ({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon }));
+    const items = [];
+    if (cat) {
+      (cat.questions || []).forEach(q => { items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon, source: 'builtin' }); });
+    }
+    // 加上用户添加的
+    const userItems = getUserItems().filter(q => q.categoryId === catId);
+    userItems.forEach(q => {
+      items.push({ ...q, categoryName: cat ? cat.name : catId, categoryIcon: cat ? cat.icon : '📝', source: 'user' });
+    });
+    return items;
   }
 
   function getFilteredQuestions() {
@@ -140,10 +267,13 @@
   // ============ Render sidebar ============
   function renderSidebar() {
     if (typeof EMBEDDED_DATA === 'undefined') return;
+    const userItems = getUserItems();
     let html = '';
     EMBEDDED_DATA.forEach(cat => {
-      const reviewedInCat = (cat.questions || []).filter(q => reviewedSet.has(q.id)).length;
-      const totalInCat = (cat.questions || []).length;
+      const userInCat = userItems.filter(q => q.categoryId === cat.id);
+      const allInCat = (cat.questions || []).concat(userInCat);
+      const reviewedInCat = allInCat.filter(q => reviewedSet.has(q.id)).length;
+      const totalInCat = allInCat.length;
       const isActive = currentCategory === cat.id;
       const isExpanded = isActive || currentQuery.trim() !== '';
       html += `<div class="nav-category">`;
@@ -156,6 +286,9 @@
       html += `<div class="nav-questions${isExpanded ? ' show' : ''}">`;
       (cat.questions || []).forEach(q => {
         html += `<a class="nav-question${reviewedSet.has(q.id) ? ' reviewed' : ''}" data-id="${q.id}" title="${q.q.replace(/"/g, '&quot;')}">${q.q}</a>`;
+      });
+      userInCat.forEach(q => {
+        html += `<a class="nav-question${reviewedSet.has(q.id) ? ' reviewed' : ''} user-item" data-id="${q.id}" title="${q.q.replace(/"/g, '&quot;')}">✎ ${q.q}</a>`;
       });
       html += `</div></div>`;
     });
@@ -234,6 +367,10 @@
               <button class="btn-reviewed${reviewedSet.has(item.id) ? ' marked' : ''}" data-id="${item.id}">
                 ${reviewedSet.has(item.id) ? '✓ 已掌握' : '标记为已掌握'}
               </button>
+              ${item.source === 'user' ? `<span class="qa-card-actions">
+                <button class="btn-sm" data-edit="${item.id}">✎ 编辑</button>
+                <button class="btn-sm danger" data-del="${item.id}">✕ 删除</button>
+              </span>` : ''}
             </div>
           </div>
         </div>`;
@@ -253,6 +390,17 @@
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleReviewed(btn.dataset.id);
+      });
+    });
+
+    // Bind edit/delete buttons (user items)
+    contentArea.querySelectorAll('.btn-sm[data-edit]').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(btn.dataset.edit); });
+    });
+    contentArea.querySelectorAll('.btn-sm[data-del]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('确定删除？')) { deleteUserItem(btn.dataset.del); renderSidebar(); expandedCards.clear(); renderContent(getFilteredQuestions()); }
       });
     });
 
