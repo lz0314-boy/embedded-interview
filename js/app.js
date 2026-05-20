@@ -76,22 +76,33 @@
   const savedTheme = storage.get('theme', 'light');
   applyTheme(savedTheme);
 
+  // ============ Merge duplicate category IDs ============
+  function getMergedData() {
+    if (typeof EMBEDDED_DATA === 'undefined') return [];
+    const map = new Map();
+    EMBEDDED_DATA.forEach(cat => {
+      if (map.has(cat.id)) {
+        const existing = map.get(cat.id);
+        existing.questions = (existing.questions || []).concat(cat.questions || []);
+      } else {
+        map.set(cat.id, { ...cat, questions: [...(cat.questions || [])] });
+      }
+    });
+    return Array.from(map.values());
+  }
+
   // ============ All questions flat list ============
   function getBuiltInCategories() {
-    if (typeof EMBEDDED_DATA === 'undefined') return [];
-    return EMBEDDED_DATA.map(cat => ({ id: cat.id, name: cat.name, icon: cat.icon }));
+    return getMergedData().map(cat => ({ id: cat.id, name: cat.name, icon: cat.icon }));
   }
 
   function getAllQuestions() {
     const items = [];
-    if (typeof EMBEDDED_DATA !== 'undefined') {
-      EMBEDDED_DATA.forEach(cat => {
-        (cat.questions || []).forEach(q => {
-          items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon, source: 'builtin' });
-        });
+    getMergedData().forEach(cat => {
+      (cat.questions || []).forEach(q => {
+        items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon, source: 'builtin' });
       });
-    }
-    // 合并用户添加的条目
+    });
     const userItems = getUserItems();
     userItems.forEach(q => {
       const cat = getBuiltInCategories().find(c => c.id === q.categoryId);
@@ -221,12 +232,11 @@
   }
 
   function getQuestionsByCategory(catId) {
-    const cat = (typeof EMBEDDED_DATA !== 'undefined') ? EMBEDDED_DATA.find(c => c.id === catId) : null;
+    const cat = getMergedData().find(c => c.id === catId);
     const items = [];
     if (cat) {
       (cat.questions || []).forEach(q => { items.push({ ...q, categoryId: cat.id, categoryName: cat.name, categoryIcon: cat.icon, source: 'builtin' }); });
     }
-    // 加上用户添加的
     const userItems = getUserItems().filter(q => q.categoryId === catId);
     userItems.forEach(q => {
       items.push({ ...q, categoryName: cat ? cat.name : catId, categoryIcon: cat ? cat.icon : '📝', source: 'user' });
@@ -268,8 +278,9 @@
   function renderSidebar() {
     if (typeof EMBEDDED_DATA === 'undefined') return;
     const userItems = getUserItems();
+    const mergedData = getMergedData();
     let html = '';
-    EMBEDDED_DATA.forEach(cat => {
+    mergedData.forEach(cat => {
       const userInCat = userItems.filter(q => q.categoryId === cat.id);
       const allInCat = (cat.questions || []).concat(userInCat);
       const reviewedInCat = allInCat.filter(q => reviewedSet.has(q.id)).length;
