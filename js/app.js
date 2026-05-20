@@ -7,6 +7,7 @@
   // ============ State ============
   let currentCategory = null;
   let currentQuery = '';
+  let currentFilter = 'all'; // 'all' | 'unreviewed' | 'reviewed'
   let expandedCards = new Set();
 
   // ============ DOM refs ============
@@ -145,6 +146,7 @@
   const formEditId = $('#formEditId');
   const formDeleteBtn = $('#formDeleteBtn');
   const addKnowledgeBtn = $('#addKnowledgeBtn');
+  const filterSelect = $('#filterSelect');
 
   function populateCategoryDropdown() {
     const cats = getBuiltInCategories();
@@ -213,6 +215,15 @@
   formDeleteBtn.addEventListener('click', handleDeleteFromModal);
   addKnowledgeBtn.addEventListener('click', () => openAddModal(currentCategory));
 
+  // Review filter
+  filterSelect.addEventListener('change', () => {
+    currentFilter = filterSelect.value;
+    storage.set('filter', currentFilter);
+    renderSidebar();
+    expandedCards.clear();
+    renderContent(getFilteredQuestions());
+  });
+
   // Keyboard shortcut for modal
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modalOverlay.classList.contains('show')) { closeModal(); e.stopPropagation(); }
@@ -244,10 +255,18 @@
     return items;
   }
 
+  function applyReviewFilter(items) {
+    if (currentFilter === 'reviewed') return items.filter(it => reviewedSet.has(it.id));
+    if (currentFilter === 'unreviewed') return items.filter(it => !reviewedSet.has(it.id));
+    return items;
+  }
+
   function getFilteredQuestions() {
-    if (currentQuery.trim()) return searchQuestions(currentQuery);
-    if (currentCategory) return getQuestionsByCategory(currentCategory);
-    return getAllQuestions();
+    let items;
+    if (currentQuery.trim()) items = searchQuestions(currentQuery);
+    else if (currentCategory) items = getQuestionsByCategory(currentCategory);
+    else items = getAllQuestions();
+    return applyReviewFilter(items);
   }
 
   // ============ Highlight text ============
@@ -360,7 +379,7 @@
       group.items.forEach((item, idx) => {
         const isExpanded = expandedCards.has(item.id);
         html += `
-        <div class="qa-card${isExpanded ? ' expanded' : ''}" data-id="${item.id}">
+        <div class="qa-card${isExpanded ? ' expanded' : ''}${reviewedSet.has(item.id) ? ' reviewed' : ''}" data-id="${item.id}">
           <div class="qa-card-header" data-id="${item.id}">
             <span class="qa-card-index">${idx + 1}</span>
             <span class="qa-card-question">${currentQuery ? highlightText(item.q, currentQuery) : item.q}</span>
@@ -611,8 +630,11 @@
       contentArea.innerHTML = '<div class="no-results"><div class="icon">⚠️</div><h3>数据加载失败</h3><p>请确保 data.js 文件已正确加载</p></div>';
       return;
     }
+    // restore saved filter
+    currentFilter = storage.get('filter', 'all');
+    filterSelect.value = currentFilter;
     renderSidebar();
-    const all = getAllQuestions();
+    const all = getFilteredQuestions();
     renderContent(all);
     updateProgress();
     updateSearchUI();
