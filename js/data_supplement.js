@@ -64,3 +64,12 @@ struct Good { double b; int c; char a; };</code></pre><p>也按"对齐要求从�
     ]
   }
 ];
+
+const EMBEDDED_DATA = [
+  ...DATA_PART1,
+  ...DATA_PART1B,
+  ...DATA_PART2,
+  ...DATA_PART3,
+  ...DATA_RESUME,
+  ...DATA_SUPPLEMENT
+];

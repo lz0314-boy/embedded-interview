@@ -102,11 +102,4 @@ void jump_to_app(void) {
   }
 ];
 
-const EMBEDDED_DATA = [
-  ...DATA_PART1,
-  ...DATA_PART1B,
-  ...DATA_PART2,
-  ...DATA_PART3,
-  ...DATA_RESUME,
-  ...DATA_SUPPLEMENT
-];
+// EMBEDDED_DATA 定义已移至 data_supplement.js 末尾
