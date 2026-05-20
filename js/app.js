@@ -58,6 +58,13 @@
     if (card) {
       const btn = card.querySelector('.btn-reviewed');
       if (btn) btn.classList.toggle('marked', reviewedSet.has(id));
+      // 即时更新卡片折叠态视觉
+      card.classList.toggle('reviewed', reviewedSet.has(id));
+      const idx = card.querySelector('.qa-card-index');
+      if (idx) {
+        idx.style.background = reviewedSet.has(id) ? '#22c55e' : '';
+        idx.style.color = reviewedSet.has(id) ? '#fff' : '';
+      }
     }
   }
 
