@@ -25,10 +25,10 @@ static void internal_func(void) { /* 仅当前文件可调用 */ }</code></pre>`
         q: "const关键字修饰指针时有哪几种情况？如何区分？",
         a: `<p><strong>const修饰指针有四种情况，记忆口诀：const离谁近就修饰谁。</strong></p>
 <table><tr><th>声明</th><th>含义</th></tr>
-<tr><td><code>const int *p</code></td><td>指向常量的指针——<strong>指针可变，指向的内容不可变</strong>（const在*左边）</td></tr>
+<tr><td><code>const int *p</code></td><td>常量指针——<strong>指针可变，指向的内容不可（const在*左边，修饰int，内容只读）</strong></td></tr>
 <tr><td><code>int const *p</code></td><td>同上，完全等价</td></tr>
-<tr><td><code>int * const p</code></td><td>常量指针——<strong>指针本身不可变，指向的内容可变</strong>（const在*右边）</td></tr>
-<tr><td><code>const int * const p</code></td><td>指向常量的常量指针——<strong>指针和内容都不可变</strong></td></tr></table>
+<tr><td><code>int * const p</code></td><td>指针常量——<strong>指针本身不可变，指向的内容可变（const在*右边，修饰p，指针只读）</strong></td></tr>
+<tr><td><code>const int * const p</code></td><td>指向常量的指针常量——<strong>指针和内容都不可变</strong></td></tr></table>
 <p>const修饰的变量在嵌入式中有特殊意义：全局const变量存放在Flash(.rodata段)而非RAM，可节省宝贵的RAM空间。在函数参数中使用const可明确表达"只读"语义，增强代码可读性和安全性。</p>`
       },
       {
