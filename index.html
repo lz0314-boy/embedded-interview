@@ -1,112 +1,110 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>嵌入式八股文 - 面试学习一站通</title>
-  <meta name="description" content="嵌入式软件工程师面试知识库：C语言、RTOS、Linux、硬件外设、通信协议、ARM架构、UDS诊断、AUTOSAR、大厂面试真题、手写代码题">
-  <link rel="stylesheet" href="css/style.css?v=6">
-  <script src="js/data.js?v=6" defer></script>
-  <script src="js/data_resume.js?v=6" defer></script>
-  <script src="js/data_rtthread.js?v=6" defer></script>
-  <script src="js/data_supplement.js?v=6" defer></script>
-  <script src="js/app.js?v=6" defer></script>
+  <meta name="description" content="面向嵌入式软件秋招的个人面试复习工作台，覆盖简历项目、C/RTOS/Linux/CAN 与调试方法。">
+  <meta name="theme-color" content="#f5f7f8">
+  <title>嵌入式面试作战台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/style.css?v=10">
+  <script src="js/lucide.min.js?v=0.468.0" defer></script>
+  <script src="js/data.js?v=10" defer></script>
+  <script src="js/data_resume.js?v=10" defer></script>
+  <script src="js/data_rtthread.js?v=10" defer></script>
+  <script src="js/data_supplement.js?v=10" defer></script>
+  <script src="js/app.js?v=10" defer></script>
 </head>
 <body>
-
-  <!-- 移动端遮罩 -->
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-  <!-- ============ 侧边栏导航 ============ -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <h1>嵌入式八股文</h1>
-      <div class="subtitle">Embedded Interview Guide</div>
-    </div>
-    <div class="sidebar-stats">
-      <span>总题目 <strong id="totalCount">0</strong></span>
-      <span>已掌握 <strong id="reviewedCount">0</strong></span>
-    </div>
-    <nav class="sidebar-nav" id="sidebarNav">
-      <!-- 由 app.js 动态渲染 -->
-    </nav>
-  </aside>
-
-  <!-- ============ 主内容区 ============ -->
-  <div class="main-content">
-
-    <!-- 顶部工具栏 -->
-    <header class="top-bar">
-      <button class="menu-toggle" id="menuToggle" aria-label="菜单">☰</button>
-
-      <div class="search-wrapper">
-        <span class="search-icon">🔍</span>
-        <input type="text" id="searchInput" placeholder="搜索知识点、面试题、关键词...">
-        <button class="search-clear" id="searchClear" aria-label="清除">✕</button>
-        <span class="search-hint" id="searchHint">Ctrl+K</span>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="主导航">
+      <div class="brand">
+        <button class="brand-mark" data-route="dashboard" aria-label="返回复习台">EI</button>
+        <div>
+          <strong>嵌入式面试作战台</strong>
+          <span>2026 秋招个人版</span>
+        </div>
+        <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="关闭导航" title="关闭导航">
+          <i data-lucide="x"></i>
+        </button>
       </div>
 
-      <div class="toolbar-actions">
-        <select class="filter-select" id="filterSelect">
-          <option value="all">全部</option>
-          <option value="unreviewed">未掌握</option>
-          <option value="reviewed">已掌握</option>
-        </select>
-        <button class="btn accent" id="addKnowledgeBtn"><span>+ 添加</span></button>
-        <button class="btn" id="expandAllBtn"><span>展开全部</span></button>
-        <button class="btn" id="collapseAllBtn"><span>折叠全部</span></button>
-        <button class="btn btn-icon" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">🌙</button>
+      <div class="sidebar-progress">
+        <div class="progress-copy">
+          <span>总掌握度</span>
+          <strong id="sidebarProgressText">0%</strong>
+        </div>
+        <div class="progress-track" aria-hidden="true"><span id="sidebarProgressBar"></span></div>
+        <div class="progress-meta"><span id="sidebarMastered">0 已掌握</span><span id="sidebarTotal">0 题</span></div>
       </div>
 
-      <div class="progress-indicator" id="progressIndicator">
-        <span id="progressText">0%</span>
-        <div class="bar"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
+      <nav class="main-nav">
+        <button class="nav-item active" data-route="dashboard"><i data-lucide="layout-dashboard"></i><span>今日复习</span></button>
+        <button class="nav-item" data-route="library"><i data-lucide="library-big"></i><span>全部题库</span></button>
+        <button class="nav-item" data-route="flashcard"><i data-lucide="layers-3"></i><span>闪卡训练</span><kbd>F</kbd></button>
+        <button class="nav-item" data-route="mock"><i data-lucide="messages-square"></i><span>模拟面试</span><kbd>M</kbd></button>
+        <button class="nav-item" data-route="bookmarks"><i data-lucide="bookmark"></i><span>重点收藏</span></button>
+      </nav>
+
+      <div class="nav-separator"><span>简历防守</span></div>
+      <nav class="category-nav" id="resumeNav"></nav>
+      <div class="nav-separator"><span>基础知识</span></div>
+      <nav class="category-nav" id="foundationNav"></nav>
+
+      <div class="sidebar-footer">
+        <button class="nav-item" id="exportBtn"><i data-lucide="download"></i><span>导出学习记录</span></button>
+        <button class="nav-item" id="themeToggle"><i data-lucide="moon"></i><span>切换主题</span></button>
       </div>
-    </header>
+    </aside>
 
-    <!-- 内容区 -->
-    <main class="content-area" id="contentArea">
-      <!-- 由 app.js 动态渲染 -->
-    </main>
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
 
-  </div>
+    <div class="workspace">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="打开导航" title="打开导航"><i data-lucide="menu"></i></button>
+        <div class="search-box" id="searchBox">
+          <i data-lucide="search"></i>
+          <input id="searchInput" type="search" autocomplete="off" placeholder="搜索问题、项目、知识点" aria-label="搜索题库">
+          <kbd>Ctrl K</kbd>
+          <button class="icon-btn search-clear" id="searchClear" aria-label="清除搜索" title="清除搜索"><i data-lucide="x"></i></button>
+        </div>
+        <div class="topbar-actions">
+          <button class="text-btn" id="randomBtn"><i data-lucide="shuffle"></i><span>随机一题</span></button>
+          <button class="icon-btn" id="focusBtn" aria-label="进入闪卡训练" title="进入闪卡训练"><i data-lucide="timer-reset"></i></button>
+        </div>
+      </header>
 
-  <!-- 返回顶部 -->
-  <button class="back-to-top" id="backToTop" aria-label="返回顶部" title="返回顶部">↑</button>
-
-  <!-- ============ 添加知识模态框 ============ -->
-  <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
-      <div class="modal-header">
-        <span id="modalTitle">添加新知识点</span>
-        <button class="modal-close" id="modalClose">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>所属分类</label>
-          <select id="formCategory"></select>
-        </div>
-        <div class="form-group">
-          <label>问题</label>
-          <input type="text" id="formQuestion" placeholder="输入面试问题...">
-        </div>
-        <div class="form-group">
-          <label>答案 <span class="hint">（支持HTML：&lt;p&gt;&lt;ul&gt;&lt;pre&gt;&lt;table&gt;等标签）</span></label>
-          <textarea id="formAnswer" placeholder="输入详细答案...&#10;&#10;可用HTML标签格式化：&#10;&lt;p&gt;段落&lt;/p&gt;&#10;&lt;pre&gt;&lt;code class=&quot;language-c&quot;&gt;代码块&lt;/code&gt;&lt;/pre&gt;&#10;&lt;ul&gt;&lt;li&gt;列表项&lt;/li&gt;&lt;/ul&gt;"></textarea>
-        </div>
-        <div class="form-group">
-          <label>标签 <span class="hint">（用逗号分隔，如：高频, ARM, FreeRTOS）</span></label>
-          <input type="text" id="formTags" placeholder="高频, 基础">
-        </div>
-        <input type="hidden" id="formEditId">
-        <div class="form-actions">
-          <button class="btn btn-sm danger" id="formDeleteBtn" style="display:none;margin-right:auto;">删除</button>
-          <button class="btn" id="formCancelBtn">取消</button>
-          <button class="btn accent" id="formSaveBtn">保存</button>
-        </div>
-      </div>
+      <main class="main" id="mainContent" tabindex="-1"></main>
     </div>
   </div>
 
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+
+  <dialog class="interview-dialog" id="interviewDialog">
+    <div class="dialog-header">
+      <div><span class="eyebrow">MOCK INTERVIEW</span><h2>模拟面试设置</h2></div>
+      <button class="icon-btn" data-close-dialog aria-label="关闭" title="关闭"><i data-lucide="x"></i></button>
+    </div>
+    <form id="mockSetupForm" method="dialog">
+      <label class="field-label" for="mockScope">题目范围</label>
+      <select id="mockScope" class="field-control">
+        <option value="resume">简历与项目</option>
+        <option value="foundation">嵌入式基础</option>
+        <option value="all">全部题库</option>
+      </select>
+      <label class="field-label" for="mockCount">题目数量</label>
+      <div class="segmented" id="mockCount" role="radiogroup" aria-label="题目数量">
+        <label><input type="radio" name="mockCount" value="5" checked><span>5 题</span></label>
+        <label><input type="radio" name="mockCount" value="10"><span>10 题</span></label>
+        <label><input type="radio" name="mockCount" value="15"><span>15 题</span></label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary-btn" data-close-dialog>取消</button>
+        <button type="submit" class="primary-btn"><i data-lucide="play"></i>开始面试</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input id="importInput" type="file" accept="application/json" hidden>
 </body>
 </html>

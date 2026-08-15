@@ -29,7 +29,7 @@ static void internal_func(void) { /* 仅当前文件可调用 */ }</code></pre>`
 <tr><td><code>int const *p</code></td><td>同上，完全等价</td></tr>
 <tr><td><code>int * const p</code></td><td>指针常量——<strong>指针本身不可变，指向的内容可变（const在*右边，修饰p，指针只读）</strong></td></tr>
 <tr><td><code>const int * const p</code></td><td>指向常量的指针常量——<strong>指针和内容都不可变</strong></td></tr></table>
-<p>const修饰的变量在嵌入式中有特殊意义：全局const变量存放在Flash(.rodata段)而非RAM，可节省宝贵的RAM空间。在函数参数中使用const可明确表达"只读"语义，增强代码可读性和安全性。</p>`
+<p>const修饰的对象通常会被编译器放入只读段（如<code>.rodata</code>）；该段最终位于Flash还是启动时搬到RAM，取决于链接脚本、存储架构和是否需要运行时重定位，不能仅凭<code>const</code>绝对判断。函数参数使用const可明确表达“只读”语义，增强可读性和接口约束。</p>`
       },
       {
         id: "c-3", tags: ["高频","必考"],
@@ -1272,20 +1272,13 @@ const DATA_PART3 = [
     while (n--) *d++ = *s++;
     return dst;
 }</code></pre><p>注意：若用户保证无重叠用memcpy；可能重叠需用memmove。返回dst以支持链式调用。</p>` },
-      { id: "cd-2", tags: ["手写代码","高频"], q: "手写strcpy实现（考虑内存重叠）", a: `<pre><code class="language-c">char *my_strcpy(char *dst, const char *src) {
-    if (!dst || !src) return NULL;
+      { id: "cd-2", tags: ["手写代码","高频"], q: "手写strcpy实现，并说明空指针、越界和内存重叠边界", a: `<pre><code class="language-c">char *my_strcpy(char *dst, const char *src) {
     char *ret = dst;
-    // 处理重叠：若dst在src中间且非末尾，需反向拷贝
-    if (dst > src && dst < src + strlen(src)) {
-        dst += strlen(src);
-        *(dst--) = '\\0';
-        src += strlen(src) - 1;
-        while (dst >= ret) *dst-- = *src--;
-    } else {
-        while ((*dst++ = *src++) != '\\0');
+    while ((*dst++ = *src++) != '\\0') {
+        /* copy including the terminating null byte */
     }
     return ret;
-}</code></pre><p>关键：检测重叠条件(dst在src字符串中间)，重叠时从末尾反向拷贝。返回dst指针支持链式调用。</p>` },
+}</code></pre><p><strong>边界：</strong>标准<code>strcpy</code>要求源串以<code>'\\0'</code>结尾、目标缓冲区足够大，传入空指针或源/目标内存重叠都属于未定义行为。可能重叠时应使用<code>memmove</code>思路并显式传入长度；需要限制目标容量时应设计带长度和返回码的项目接口，而不是假装<code>strcpy</code>能自行知道缓冲区大小。返回原始<code>dst</code>支持链式调用。</p>` },
       { id: "cd-3", tags: ["手写代码","高频"], q: "单链表反转（迭代+递归）", a: `<pre><code class="language-c">struct ListNode { int val; struct ListNode *next; };
 // 迭代法：三指针法 O(n)/O(1)
 struct ListNode* reverse_iter(struct ListNode *head) {

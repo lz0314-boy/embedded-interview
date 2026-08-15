@@ -1,126 +1,854 @@
+/*
+ * 简历防守题库
+ *
+ * 这里的内容按“能先说什么、继续追问什么、证据在哪里、哪些话不要说”组织。
+ * answer 仍使用 HTML，是为了和基础题库保持离线兼容；新增字段由 app.js 单独渲染。
+ */
 const DATA_RESUME = [
   {
-    id: "resume-interview",
-    name: "简历面试与项目深挖",
-    icon: "📋",
+    id: "resume-core", name: "简历总览与开场", icon: "user-round", track: "resume",
+    desc: "先把自己的经历讲成一条主线，再进入项目细节。开场答案控制在 60～90 秒。",
     questions: [
-      // ========== 海康威视实习 - GTC平台化 ==========
-      { id: "ri-1", tags: ["海康","平台化","高频"], q: "[海康] GTC模块平台化的核心思想是什么？解决了什么问题？", a: `<p>核心思想：通过<strong>编译时条件隔离 + 运行时动态适配</strong>，让同一份GTC时间戳驱动代码支持多款TI SoC（J721E/J721S2/J784S4）和不同CPU核（ARM Cortex-A/C66x DSP/Cortex-R），上层调用<code>hal_gtc_getms()</code>无需关心底层差异。</p><p><strong>三个关键设计：</strong></p><ul><li><strong>多SoC编译隔离</strong>：<code>#if defined(SOC_J721E)</code>包含不同的寄存器基址头文件和CSL库路径，避免错误编译</li><li><strong>地址映射差异抽象</strong>：J721E上C66x DSP核需通过RAT做地址转换，代码中通过<code>hal_get_cpuid()</code>运行时判断CPU核类型，动态设置<code>uG_gtc_base</code></li><li><strong>时钟频率统一</strong>：不同SoC默认时钟可能不同，通过<code>hal_clk_getrate()</code>获取+<code>hal_clk_setrate()</code>统一到200MHz</li></ul><p><strong>效果：</strong>新增芯片只需在初始化增加对应的基址映射逻辑，上层代码零改动。</p>` },
-      { id: "ri-2", tags: ["海康","平台化","进阶"], q: "[海康] 在J721E上C66x DSP核不能直接访问GTC寄存器，你是如何解决的？", a: `<p>J721E上C66x DSP核不能直接访问GTC物理地址（0xA90000），必须通过RAT（Region Address Translator）把一段空闲地址空间映射到真实寄存器地址。</p><p><strong>解决方案——运行时动态基址：</strong></p><ol><li>默认基址设为<code>GTC0_GTC_CFG1_BASE</code>（0xA90000）</li><li>编译J721E时通过<code>hal_get_cpuid()</code>获取当前CPU核ID</li><li>如果是C66x_0或C66x_1：先配置RAT映射（把0x200000000映射到0xA90000），再把<code>uG_gtc_base</code>改为0x200000000</li><li>其他核（ARM等）直接用真实地址0xA90000</li><li>J721S2/J784S4无此问题，基址保持0xA90000</li></ol><p>之后所有寄存器读写基于<code>uG_gtc_base</code>，不写死地址、不用<code>#ifdef</code>。同一份代码在所有SoC、所有核上都能正确读到GTC值。</p>` },
-      { id: "ri-3", tags: ["海康","平台化","进阶"], q: "[海康] GTC时间同步在主从设备上行为不一致，你是怎么设计的？", a: `<p><strong>问题：</strong>车载场景中主板(Master)是时间源、从板(Slave)需要同步到主板。如果直接在<code>hal_gtc_getus</code>里写<code>return 硬件时间+补偿值</code>，主板不需要补偿但要写时间出去，逻辑耦合混乱。</p><p><strong>解决——分离职责：</strong></p><ul><li><strong>核心函数</strong><code>hal_gtc_getus</code>只做一件事：读取硬件计数÷时钟频率=原始本地时间</li><li><strong>时间同步</strong>通过独立的条件编译块叠加：<code>#if defined(CONFIG_HW_AE_B50038_S) || defined(CONFIG_HW_AE_B50038_M)</code>时额外加<code>CPTS_DIFF_GTC</code>寄存器的补偿值</li><li>从板：差值寄存器已写入主板与本地的时间差，直接加</li><li>主板：差值寄存器为0，或不编入此宏</li><li>主板另有一个独立线程<code>stl_timesync_main</code>负责把自己的GTC时间写入共享内存</li></ul><p>核心时间读取逻辑不受同步逻辑污染，不同硬件形态通过编译宏清晰配置。</p>` },
-      { id: "ri-4", tags: ["海康","测试","进阶"], q: "[海康] 平台化后如何验证GTC时间准确性？STL自测框架怎么做的？", a: `<p><strong>仅读寄存器值不够</strong>——你知道计数器在递增，但不知道递增速度对不对。需要端到端功能测试。</p><p><strong>借助STL（Self-Test Library）框架写测试任务：</strong></p><ol><li><code>hal_gtc_getms()</code>获取开始时间→系统<code>sleep(1000)</code>→再获取结束时间→差值应=1000±1ms</li><li>同样测试us接口，同时对比OS tick（sys_pthread_tick）做交叉验证</li><li>us差值应在1,000,000±1000范围，OS tick差值应在1000±1范围</li></ol><p><strong>为什么对比OS tick？</strong>OS tick由另一个独立定时器驱动，两个独立时钟都符合预期→可信度高。如果GTC和OS tick都漂移但方向一致→系统时钟源可能有问题。</p><p><strong>效果：</strong>每个平台移植后跑STL用例自动验证准确性。早期发现过时钟频率获取失败导致的时间漂移，及时修复。测试用例已集成到CI流程。</p>` },
-      { id: "ri-5", tags: ["海康","平台化"], q: "[海康] GTC模块使用early_init宏注册，为什么需要早期初始化？", a: `<p><code>early_init(hal_gtc_init);</code>将GTC驱动注册到系统启动早期阶段执行。平台化通用初始化框架定义了模块的初始化顺序，GTC作为时间戳基础设施必须在其他依赖时间的模块（日志、定时器、STL测试框架等）之前完成初始化。</p><p>如果GTC在后期才初始化，依赖它的模块可能在启动时读到未初始化的时钟值（全0或随机值），导致超时判断异常。early_init机制保证启动顺序的确定性。</p>` },
-
-      // ========== 海康威视实习 - Tessy单元测试 ==========
-      { id: "ri-6", tags: ["海康","Tessy","测试"], q: "[海康] Tessy单元测试覆盖了哪些模块？发现了什么有价值的Bug？", a: `<p><strong>覆盖模块：</strong>secure（加解密API）、memory（内存分配/释放/地址对齐）、dmaheap（DMA缓冲池分配回收）、network（Socket封装/组播加入离开）、diagnostic（日志输出/assert处理）。</p><p><strong>最有价值的Bug——RSA签名验证中的隐式转换：</strong></p><ul><li>Tessy发现分支覆盖率只有85%，一个<code>if(pad_len<0)</code>分支不可达</li><li>分析：<code>pad_len</code>是<code>int32_t</code>，但来自被调函数返回的<code>uint32_t</code>，隐式转换后永远非负→if条件永远为假</li><li>修复：修改函数原型或增加显式范围检查</li><li>若不修复：畸形输入下可能发生数组越界</li></ul><p>其他发现的典型问题：分支不可达、资源泄漏（未释放的DMA缓冲区）、整型溢出等。</p>` },
-      { id: "ri-7", tags: ["海康","Tessy","进阶"], q: "[海康] Tessy测试中分支不可达和资源泄漏你是怎么发现的？", a: `<p>Tessy通过<strong>代码插桩</strong>记录每次测试执行的路径。生成覆盖率报告后，未覆盖的分支标记为黄色/红色。分析这些分支：(1)确认测试用例是否遗漏该路径→补充用例 (2)确认分支是否真正不可达（逻辑死代码）→修复源代码。</p><p>资源泄漏检测：Tessy可跟踪<code>malloc/free</code>的配对情况。在dmaheap模块中发现某个错误返回路径释放了pool但未释放pool->chunks数组。修复方式是统一用goto cleanup模式确保所有出口都走释放逻辑。</p>` },
-
-      // ========== 海康威视实习 - DTS ==========
-      { id: "ri-8", tags: ["海康","DTS","Linux"], q: "[海康] 基于DTS完成硬件资源注册与中断配置的流程？以SPI为例", a: `<p><strong>完整流程：</strong></p><ol><li><strong>DTS节点编写</strong>：<code>reg</code>（基址+长度）、<code>interrupts</code>（<控制器类型 中断号 触发方式>，如<GIC_SPI 45 IRQ_TYPE_EDGE_RISING>）、<code>clocks</code>、<code>pinctrl-0</code></li><li><strong>驱动匹配</strong>：<code>of_match_table</code>中<code>compatible</code>字符串与DTS的<code>compatible</code>属性匹配→probe被调用</li><li><strong>资源获取</strong>：<code>platform_get_resource(pdev, IORESOURCE_MEM, 0)</code>获取寄存器基址 → <code>devm_ioremap_resource</code>映射</li><li><strong>中断注册</strong>：<code>platform_get_irq(pdev, 0)</code>→<code>devm_request_irq</code>绑定ISR（注意ISR中不能睡眠）</li></ol><p><strong>调试手段：</strong><code>cat /proc/interrupts</code>查看中断计数、<code>cat /proc/device-tree/spi@xxx/interrupts</code>验证DTS解析结果、<code>dtc -I dtb -O dts</code>反编译dtb验证。</p>` },
-      { id: "ri-9", tags: ["海康","DTS","调试"], q: "[海康] DTS中断配置遇到过什么问题？如何排查？", a: `<p><strong>遇到过中断号写错导致不触发的问题。</strong>现象是驱动probe成功但ISR从未被调用。</p><p><strong>排查步骤：</strong></p><ol><li>对比芯片手册中该外设的中断线编号与DTS中<code>interrupts</code>第二个cell是否一致</li><li>查看<code>/proc/interrupts</code>看中断计数是否为0</li><li>确认引脚复用（pinctrl）配置正确</li><li>确认驱动是否成功调用<code>devm_request_irq</code>（检查返回值）</li><li>如果是共享中断，确认中断控制器支持且所有共享设备都正确处理了"不是我的中断"的情况</li></ol><p>定位后修正DTS中断号即可。另一个常见问题是<code>reg</code>地址空间与其他设备重叠，通过检查<code>reserved-memory</code>节点解决。</p>` },
-
-      // ========== 海康威视实习 - U-Boot快启优化 ==========
-      { id: "ri-10", tags: ["海康","U-Boot","OTA","高频"], q: "[海康] U-Boot快启优化你做了哪些工作？启动时间缩短了多少？", a: `<p><strong>背景：</strong>车载产品支持OTA，U-Boot是OTA升级流程的关键环节，启动速度直接影响升级窗口和回滚停机时间。</p><p><strong>瓶颈分析：</strong>用<code>get_timer()</code>埋点打印各阶段耗时→MMC初始化400ms、网络驱动300ms、USB初始化200ms、还有不必要的SD卡槽检测。</p><p><strong>三项优化：</strong></p><ul><li><strong>裁剪冗余驱动</strong>：OTA升级包在进U-Boot前已下载到eMMC，不需要网络和USB。关闭<code>CONFIG_NET</code>和<code>CONFIG_USB</code>及关联命令，镜像缩小、初始化更快</li><li><strong>减少非必要外设初始化</strong>：板上有两个MMC控制器（eMMC+SD卡），SD卡在U-Boot阶段完全不用，直接在设备树删掉SD卡节点（注意：disable不够——MMC驱动遍历所有节点仍会尝试访问寄存器；需彻底删节点）</li><li><strong>精简设备树</strong>：禁用多余的UART、I2C触摸屏、音频等节点，简化pinctrl只保留必需引脚组</li></ul><p><strong>踩坑：</strong>关掉网络后环境变量保存失败——因为MAC地址存储依赖网络子系统。换方案：直接从SoC OTP读MAC地址。</p><p><strong>最终效果：</strong>启动从<strong>1.2s降到0.7s，优化超过40%</strong>，镜像减少120KB。升级写入有更多时间校验，回滚停机时间缩短1/3。</p>` },
-      { id: "ri-11", tags: ["海康","U-Boot","进阶"], q: "[海康] U-Boot优化中把SD卡节点disable后eMMC也初始化失败了，为什么？怎么解决的？", a: `<p><strong>根因：</strong>该MMC驱动在probe时会遍历设备树中所有MMC控制器节点（包括disabled的），对每个节点尝试读取寄存器来判断是否存在。SD卡节点虽然disabled但仍在设备树中，驱动仍尝试访问SD卡的MMC控制器寄存器——但SD卡槽是空的或未上电→读取寄存器返回异常→驱动误判为错误→整个MMC子系统初始化失败→eMMC也受影响。</p><p><strong>解决：</strong>不是disable节点（status="disabled"），而是直接将SD卡节点从设备树中删除。驱动遍历时就完全看不到这个节点，不会去碰它。</p><p><strong>教训：</strong>disable和删除在设备树语义上不同——disable表示"硬件存在但软件不使用"，删除表示"硬件不存在"。对于会主动遍历所有节点的驱动，需要根据实际情况选择正确的方式。</p>` },
-
-      // ========== 经纬恒润实习 ==========
-      { id: "ri-12", tags: ["经纬恒润","UDS","Bootloader","高频"], q: "[经纬恒润] 描述一下基于UDS on CAN的Bootloader刷写流程", a: `<p><strong>完整刷写流程：</strong></p><ol><li><strong>诊断会话控制(0x10 0x03)</strong>：切换到扩展会话，TesterPresent(0x3E)维持会话</li><li><strong>安全访问(0x27)</strong>：请求Seed→ECU返回随机数→上位机根据Seed+内部算法计算Key→发送Key→ECU验证通过解锁</li><li><strong>下载流程</strong>：RequestDownload(0x34)→指定起始地址和数据长度→TransferData(0x36)→按块（block）发送固件数据→RequestTransferExit(0x37)→CRC完整性校验确认</li><li><strong>ECU复位(0x11)</strong>：硬复位进入新的应用程序</li></ol><p><strong>我的职责：</strong>负责上位机（VBA脚本）与BCM之间的刷写交互逻辑，实现上述流程的自动化脚本。每条诊断请求/响应的超时处理和错误重试机制都在脚本中实现。</p>` },
-      { id: "ri-13", tags: ["经纬恒润","调试"], q: "[经纬恒润] 刷写过程中遇到过VBA报文冲突的问题，怎么解决的？", a: `<p><strong>问题：</strong>通过VBA发送0x22 0x01 0x12获取版本号的报文，与Normal Communication（胎压模式、钥匙模式下对应byte递增）的0x80报文发生了冲突。两个不同来源的诊断请求在同一时刻竞争CAN总线。</p><p><strong>排查：</strong>查看源码发现两种报文的发送时机产生了重叠——Normal Comm的周期发送正碰上了VBA的诊断请求。CAN ID虽然不同但都在同一总线上，仲裁后某个会延迟，且延迟后的响应时序被打乱。</p><p><strong>解决：</strong>在VBA脚本中增加标志位检查——发送诊断请求前先检查Normal Comm是否正在进行关键通信，用特定标志位（模式切换标志）来指示当前是否允许发送诊断指令。诊断请求只在安全窗口（无Normal Comm冲突风险时）发送。</p>` },
-      { id: "ri-14", tags: ["经纬恒润","Polyspace","静态分析"], q: "[经纬恒润] Polyspace静态分析发现了哪些类型的Bug？", a: `<p>对BCM应用层代码（胎压监测、钥匙匹配、LIN通信）进行Polyspace检查，发现10+处问题：</p><table><tr><th>类型</th><th>数量</th><th>示例</th></tr><tr><td>未使用变量</td><td>~3处</td><td>遗留调试变量未删除</td></tr><tr><td>数组越界风险</td><td>2处</td><td><code>uint8_t buf[8]</code>访问索引8（最大下标应为7）</td></tr><tr><td>空指针解引用</td><td>1处</td><td>函数返回NULL后未检查直接使用</td></tr><tr><td>整型转换丢失符号</td><td>2处</td><td>有符号负数隐式转为无符号大数</td></tr><tr><td>死代码</td><td>2处</td><td><code>if(0)</code>或永远为真的分支</td></tr><tr><td>非初始化变量</td><td>2处</td><td>局部变量未赋初值就使用</td></tr></table><p>Polyspace的优势在于不需要实际运行代码，通过抽象解释分析所有可能的执行路径。在汽车功能安全（ISO26262）中使用MISRA C+Polyspace是标准实践。</p>` },
-
-      // ========== 个人项目 - 系统架构设计 ==========
-      { id: "ri-15", tags: ["架构","五层架构","高频"], q: "[项目] 整体架构怎么设计的？五层分别做什么？六个线程怎么分工？", a: `<p><strong>五层架构：</strong></p><ol><li><strong>应用层</strong>：创建六个线程（LVGL渲染5ms、传感器轮询50ms、BLE通信20ms、按键扫描20ms、idle电源管理50ms、stop休眠管理100ms）加一个500ms软件定时器做UI数据刷新和空闲计时</li><li><strong>服务层</strong>：全部纯C、零硬件依赖的业务逻辑——心率算法（IIR去直流+七点窗峰值检测）、血氧算法（AC/DC比值法）、电量查表、计算器引擎（中缀转后缀表达式求值）、BLE协议解析、OTA Ymodem状态机。可在PC上独立编译测试</li><li><strong>驱动层</strong>：每外设实现ops函数指针接口——IMU的imu_ops_t、显示的display_ops_t共十一类。MPU6050填一份，ST7789填一份。驱动层只依赖HAL接口头文件，不直接碰寄存器</li><li><strong>系统抽象层</strong>：OSAL封装RT-Thread API + HAL封装外设操作（GPIO/SPI/I2C/ADC/UART/RTC/WDT）。全项目仅此层8个文件含芯片寄存器代码。换芯片只改这一层</li><li><strong>硬件层</strong>：GD32厂商库和CMSIS，不修改</li></ol><p>层间 App→Service→Driver→HAL 全部直接函数调用纳秒级延迟。跨线程才用IPC——按键通知LVGL用消息队列、唤醒通知用邮箱。</p>` },
-      { id: "ri-16", tags: ["架构","多态","函数指针","高频"], q: "[项目] ops结构体怎么实现多态？举例子", a: `<p>接口定义一个全是函数指针的结构体：</p><pre><code class="language-c">typedef struct {
-    int32_t (*init)(void);
-    bool    (*read_accel_gyro)(drv_imu_data_t *);
-    bool    (*is_data_ready)(void);
-} imu_ops_t;</code></pre><p>MPU6050驱动把这些指针填上寄存器读写函数，生成mpu6050_imu_ops常量。上层只拿到imu_ops_t*指针，调<code>ops->read_accel_gyro(&data)</code>时编译器通过函数指针间接跳转——这就是C语言的多态。上层代码没有一行<code>#include "mpu6050.h"</code>。换芯片只改注册表里的一行ops指针，其余代码零改动。</p>` },
-      { id: "ri-17", tags: ["架构","依赖倒置","SOLID","高频"], q: "[项目] 设备注册表是什么？怎么实现依赖倒置？", a: `<p>一个全局数组g_registry[16]，启动时在board_init()把所有外设ops注入：</p><pre><code class="language-c">dev_register("imu",     &mpu6050_imu_ops);
-dev_register("display", &st7789_display_ops);</code></pre><p>服务层按名称查找：<code>imu_ops_t *imu = dev_get_ops("imu");</code>，内部是for循环strcmp匹配。</p><p><strong>依赖倒置的含义：</strong>传统写法是服务层<code>#include "mpu6050.h"</code>——上层依赖具体实现，换芯片要改服务层。注册表反转了这个方向——服务层只依赖imu_ops_t抽象接口，具体是谁由board_init注入。依赖从"上层→具体"变成了"上层→抽象←具体"，这就是SOLID依赖倒置在C语言中的落地。</p><p>我最初想引入Linux的platform bus做设备注册/匹配/probe，写完伪代码发现项目只有10个外设且编译期已知，probe/match的代码量远超实际价值。最终60行注册表替代了300+行过度设计。</p>` },
-      { id: "ri-18", tags: ["架构","IPC","实时性","高频"], q: "[项目] 层间直接调用和线程间消息队列怎么决策的？走过什么弯路？", a: `<p>最初想层间全用消息队列做彻底解耦。画完时序图发现一次传感器读取需要4次上下文切换——App→Service→Driver→返回路径，累积延迟对LVGL 60fps帧刷新不可接受。查阅PX4飞控和ESP-IDF源码后确认"<strong>垂直直接调用+水平消息队列</strong>"才是嵌入式实时系统的最佳实践。</p><p><strong>最终方案：</strong>同线程调用链(垂直)全部直接函数调用、纳秒级延迟；只有跨线程(水平)才用IPC——按键通知LVGL用消息队列、唤醒通知用邮箱。这纠正了我对"彻底解耦"的执念——解耦有代价（上下文切换），要在性能和可维护性之间找平衡点。</p>` },
-      { id: "ri-19", tags: ["架构","高内聚低耦合","高频"], q: "[项目] 高内聚低耦合具体怎么体现？举个例说明", a: `<p><strong>高内聚——每个模块只做一件事：</strong>svc_spo2_algo.c只管PPG信号处理和心率血氧计算，用环形缓冲区管理数据，不碰GPIO和I2C。hal_i2c_stm32.c只管I2C位操作，不关心上层是温湿度传感器还是EEPROM。打开任一文件能看懂全部逻辑。</p><p><strong>低耦合——模块间只通过接口通信：</strong>svc_sensor_fusion.c通过dev_get_ops("imu")获取IMU接口，没有<code>#include "mpu6050.h"</code>。app_ui_pages.c通过svc_data_store_get_sensors()获取数据，不访问全局变量。按键线程os_mb_send(idlebreak_mb)通知idle线程，两个线程互不调用对方函数。</p><p>效果：改HAL不影响Service，加新传感器只需实现ops然后注册，不改已有代码。</p>` },
-      { id: "ri-20", tags: ["架构","线程","RT-Thread","高频"], q: "[项目] 线程优先级和时间片怎么分配的？为什么LVGL最高优？", a: `<p><strong>六个线程分四个等级（数字越小优先级越高）：</strong></p><table><tr><th>线程</th><th>优先级</th><th>时间片</th><th>周期</th><th>核心工作</th></tr><tr><td>lvgl</td><td>7</td><td>15ms</td><td>5ms</td><td>lv_timer_handler帧渲染，读触摸坐标，检测触摸唤醒</td></tr><tr><td>idle_mgr</td><td>9</td><td>5ms</td><td>50ms</td><td>等idle_mq（息屏触发）和idlebreak_mb（唤醒触发）</td></tr><tr><td>stop_mgr</td><td>10</td><td>5ms</td><td>100ms</td><td>永久阻塞等stop_mq，收到后关外设进STOP模式</td></tr><tr><td>sensor</td><td>11</td><td>5ms</td><td>50ms</td><td>I2C读传感器，调血氧算法，写svc_data_store</td></tr><tr><td>ble</td><td>12</td><td>5ms</td><td>20ms</td><td>轮询BLE标志，协议解析或Ymodem状态机</td></tr><tr><td>key</td><td>13</td><td>5ms</td><td>20ms</td><td>读GPIO，检测下降沿，发MQ通知LVGL和idle</td></tr></table><p><strong>为什么LVGL最高优？</strong>智能手表和人交互的唯一界面就是屏幕——画面卡顿立刻可感知。LVGL每5ms需要跑一次帧渲染，sensor的I2C忙等（约5-10ms）如果优先级比LVGL高，会挡住渲染导致画面跳帧。LVGL在优先级7意味着不管sensor在做什么——调度器会立刻把CPU抢过来交给LVGL。sensor数据晚20ms更新用户完全感受不到，LVGL晚5ms刷新立刻看到顿一下。这是"用户体验优先于后台数据时效"的原则。</p><p>LVGL时间片15ms而非默认5ms——优先级7上没有同级竞争者，时间片轮转只在同优先级间触发。15ms是防御值——万一将来有同级线程，至少能完整渲染一帧再让出CPU。</p>` },
-      { id: "ri-21", tags: ["架构","线程"], q: "[项目] 为什么sensor优先级11？idle为什么是9？", a: `<p><strong>sensor优先级11：</strong>I2C用os_udelay忙等读FIFO——一次约5-10ms。如果sensor优先级高于LVGL，每次I2C期间LVGL的5ms定时到了也无法渲染。sensor降到11后LVGL(7)/idle(9)/stop(10)都可随时抢占它。传感器数据晚几十ms对功能无影响——UI下一次500ms刷新时自然拿到最新值。</p><p><strong>idle优先级9：</strong>高于sensor(11)——保证idle线程就绪时不被sensor的I2C阻塞。最坏情况被LVGL挡住：LVGL正在执行一帧lv_timer_handler，idle需等LVGL主动让出CPU（最多5ms）。5ms的亮度恢复延迟人眼完全感知不到（视觉反应时间约100-200ms）。所以idle不需要和LVGL同级——9就够了。</p><p><strong>sensor基准周期从500ms改为50ms：</strong>用单一uint8_t计数器取模分频——tick%2→IMU每100ms、tick%10→心率血氧每500ms、tick%40→温湿度每2s。单计数器方案比原来三个独立静态计数器的好处是所有传感器基于同一时间基准，不存在各计数器因不同复位周期导致的相位漂移。</p>` },
-
-      // ========== 个人项目 - 健康算法 ==========
-      { id: "ri-22", tags: ["算法","心率","PPG","高频"], q: "[项目] 从手指放上传感器到显示心率血氧，完整处理链路是怎样的？", a: `<p><strong>先理解三个概念：</strong></p><ul><li><strong>PPG：</strong>MAX30102的红光和红外LED交替发光照进手指，心脏每跳一次血管血容量增加→光被多吸收一点→反射光减少→传感器数值出现微小下降。这个随心跳波动的光强信号就是光电容积脉搏波</li><li><strong>DC（直流分量）：</strong>皮肤/骨骼/肌肉对光的固定衰减，数值很大（约十万量级），不随脉搏变化</li><li><strong>AC（交流分量）：</strong>随脉搏波动的部分——幅度很小，只有DC的约1/50到1/100。AC才是携带心率和血氧信息的核心</li></ul><p><strong>第一步——硬件自动采样：</strong>MAX30102以100sps自动工作，每周期10ms红光LED亮411μs+红外LED亮411μs采样，各出18位值成对存入32槽FIFO。每500ms驱动轮询一次读出最多8对。</p><p><strong>第二步——一阶IIR去直流：</strong>baseline = baseline + 0.01×(raw - baseline)。α=0.01、截止频率约0.16Hz，刚好低于最低心率0.5Hz。AC = |raw - baseline|。红光和红外各独立做一遍。</p><p><strong>第三步——心率计算：</strong>七点滑动窗口扫描去直流后的红光AC——中心点≥其余六个点认定为心跳峰值。两次峰间隔<425ms的丢弃（>141bpm噪声）。连续收集7个瞬时心率取算术平均。动态阈值=窗口均值+(极差÷4)，自动适应不同用户信号强弱。</p><p><strong>第四步——血氧计算：</strong>两路AC各维护32点滑动窗口。DC=窗口均值，AC=窗口峰峰值。R=(红光AC/红光DC)÷(红外AC/红外DC)——先各自除以DC做归一化（排除手指粗细肤色影响），再相除约掉DC绝对值，R值只反映血红蛋白的化学特性。SpO2=110-25×R，钳位70%~100%。</p>` },
-      { id: "ri-23", tags: ["算法","DSP","高频"], q: "[项目] IIR的α为什么取0.01？窗口为什么是七点？±3bpm怎么验证的？", a: `<p><strong>α=0.01</strong>在100sps下截止约0.16Hz——刚好低于0.5Hz最低心率，保留完整脉搏波动。α取0.1则截止1.6Hz→脉搏信号会被当DC吃掉。α取0.001太慢→姿势变化导致基线抬升要几十秒才能跟上，这期间血氧值不准。</p><p><strong>七点窗：</strong>跨70ms，刚好捕获一个心跳收缩峰（宽约100-200ms）的完整上升下降沿。三点太窄易被噪声触发，七点在抗噪和灵敏度间平衡最好。</p><p><strong>验证方法：</strong>Polar H10胸带做对照——五人静坐加步行各三分钟，每整分钟对比手表输出和Polar值，共30组数据。静坐±2bpm，步行±3bpm。运动伪影用MPU6050加速度辅助——三轴合成超1.5g标记数据不可靠不参与计算。</p>` },
-      { id: "ri-24", tags: ["算法","血氧"], q: "[项目] 为什么心率只要AC、血氧需要AC和DC两个？区别在哪？", a: `<p><strong>心率看"什么时候跳"</strong>——AC峰值在时间轴上的位置，DC不影响峰出现的时刻。只需AC信号做峰检测即可。</p><p><strong>血氧看"跳的幅度比例"</strong>——不同人的皮肤吸收差异导致AC绝对值差距巨大（皮肤厚的AC可能只有皮肤薄的1/3），直接比绝对值不准确。必须先除以各自的DC做归一化，把AC变成和手指物理条件无关的比例值，再跨通道比较。此时DC被约掉，R值只反映血红蛋白的化学特性。这是PPG血氧计算最核心的原理。</p>` },
-
-      // ========== 个人项目 - OTA升级 ==========
-      { id: "ri-25", tags: ["OTA","Bootloader","高频"], q: "[项目] Flash分区怎么划分的？从PC端SecureCRT到手表重启的完整OTA流程？", a: `<p><strong>Flash分区（GD32F405 1MB）：</strong></p><pre><code>0x08000000 ┌──────────────────┐
-           │   Bootloader     │  16KB （上电启动）
-0x08004000 ├──────────────────┤
-           │   APP_A          │  496KB（当前运行固件）
-0x08080000 ├──────────────────┤
-           │   APP_B          │  496KB（OTA目标分区）
-0x080FC000 ├──────────────────┤
-           │   Reserved       │  16KB
-0x080FFFFF └──────────────────┘</code></pre><p><strong>阶段一——进入OTA：</strong>手表收到OV+OTA命令→EEPROM写UPDATE_STATUS=0x01（传输中）→回复+OTA_READY→每秒发'C'（请求CRC16校验模式的Ymodem传输）。</p><p><strong>阶段二——Ymodem握手+传输：</strong>SecureCRT Send Ymodem选.bin文件→发第0包（SOH+128字节）含文件名和大小→解析后擦除APP_B区→回ACK再发'C'→从1号包起每包1024字节+2字节CRC16-CCITT→STM32独立算CRC→通过回ACK写入Flash，失败回NAK触发SecureCRT重发→全部发完后EOT握手（两次）+空包确认传输完毕。</p><p><strong>阶段三——写标志位+复位：</strong>EEPROM写BOOT_TARGET=0x01（下次启动APP_B）+ UPDATE_STATUS=0xFF（完成）→NVIC_SystemReset()软件复位。Bootloader上电读EEPROM BOOT_TARGET→0x00跳APP_A、0x01跳APP_B→关全局中断→设MSP/PC→跳转。</p><p><strong>阶段四——看门狗回滚：</strong>APP_B启动后5秒内没喂够IWDG→看门狗复位→Bootloader检测复位源为IWDG而非POR→读BOOT_COUNT→连续失败≥3次强制改BOOT_TARGET回0x00跳APP_A。</p>` },
-      { id: "ri-26", tags: ["OTA","CRC","校验","高频"], q: "[项目] CRC校验怎么保证数据传输不出错？每包的具体过程？三层校验机制？", a: `<p><strong>第一层——BLE链路层CRC：</strong>KT6368 BLE无线传输自带链路层24位CRC，每个空中包都带校验值，接收端硬件自动校验。校验失败自动丢弃并请求重传。硬件实现，不占CPU。只能保证"BLE空中这一段"正确。</p><p><strong>第二层——Ymodem协议层CRC16-CCITT（应用层端到端校验）：</strong>参数：多项式0x1021，初值0x0000，输入输出均不反转。每收到一包的1024字节后，STM32在RAM里独立计算一次CRC16，和SecureCRT发来附在包尾的2字节CRC16比对——匹配→回ACK(0x06)→按字写入Flash；不匹配→回NAK(0x15)→SecureCRT自动重发本包。CRC16能检出所有奇数个比特翻转、所有长度≤16的突发错误、99.998%长度>17的突发错误。每包独立校验——错误只重发一包而非整个256KB文件重传。</p><p><strong>第三层——EEPROM标志位兜底（防Flash写入途中断电）：</strong>EEPROM的UPDATE_STATUS在OTA开始前先写0x01（传输中），全部包写完且EOT确认后才写0xFF（完成）。如果传输中途断电——上电后Bootloader读STATUS=0x01就知道APP_B存的是半截固件→直接判定不可用→擦除APP_B→回APP_A。先写状态后写数据——和Linux文件系统journal同样思想。</p>` },
-      { id: "ri-27", tags: ["OTA","EEPROM"], q: "[项目] EEPROM存哪些标志位？每个字节的含义？", a: `<table><tr><th>地址</th><th>名称</th><th>字节</th><th>含义</th></tr><tr><td>0x10</td><td>BOOT_TARGET</td><td>1</td><td>0x00=APP_A, 0x01=APP_B</td></tr><tr><td>0x11</td><td>UPDATE_STATUS</td><td>1</td><td>0x00=空闲, 0x01=传输中, 0xFF=完成</td></tr><tr><td>0x12</td><td>DEFAULT_BANK</td><td>1</td><td>当前稳定版是A还是B</td></tr><tr><td>0x13</td><td>BOOT_COUNT</td><td>1</td><td>连续启动失败计数，≥3回滚</td></tr><tr><td>0x14</td><td>IMAGE_SIZE</td><td>4</td><td>当前固件大小，小端序</td></tr></table><p>UPDATE_STATUS是整个掉电保护的核心——固件写到一半断电，下次上电Bootloader看到STATUS=0x01就知道APP_B是坏的，清空标志跳APP_A。</p>` },
-
-      // ========== 个人项目 - 电源管理 ==========
-      { id: "ri-28", tags: ["功耗","休眠","高频"], q: "[项目] 四级电源状态机怎么切换？休眠功耗<1mA怎么测？", a: `<p><strong>四级状态：</strong></p><ol><li><strong>正常：</strong>全外设开，LVGL正常亮度，MAX30102连续采样，BLE保持连接</li><li><strong>息屏（30s无操作）：</strong>背光降到5%，传感器和BLE保持</li><li><strong>休眠（再300s无操作）：</strong>enter_sleep回调依次关传感器→BLE→LCD+触摸→看门狗→MCU进STOP模式，只留RTC和按键/充电外部中断</li><li><strong>充电：</strong>检测引脚拉低→邮箱发WAKEUP_CHARGE→idle线程切换充电态禁休眠</li></ol><p>唤醒后exit_sleep反序恢复——先开看门狗、再LCD和触摸、最后BLE和传感器。顺序重要：SPI和DMA的时钟在STOP模式下停了，必须重新初始化才能恢复LCD显示。</p><p><strong>功耗测量：</strong>万用表串电池正极和VCC，mA档。正常约30mA，STOP模式实测约0.8mA（手册STOP约0.4mA+LSE 0.2mA+GPIO漏电0.2mA）。500mAh电池纯待机625h≈26天。正常使用每天亮屏2h+休眠22h≈82mAh，充一次约6天。</p>` },
-      { id: "ri-29", tags: ["功耗","IPC","邮箱"], q: "[项目] 为什么唤醒通知用邮箱不用消息队列？四个唤醒源怎么区分？", a: `<p><strong>MQ每条消息1字节——</strong>四种唤醒源发的都是同一个uint8_t(1)，idle线程收到后完全不知道是谁唤醒的，只能无差别恢复。但充电唤醒和按键唤醒的处理策略应该不同——充电要进充电态禁休眠，按键的可能需要继续处理按键事件。</p><p><strong>改用邮箱：</strong>每消息4字节，定义wakeup_source_t枚举——WAKEUP_KEY=1、WAKEUP_TOUCH=2、WAKEUP_CHARGE=3、WAKEUP_WRIST=4。idle线程switch-case做差异化处理：充电直接进充电态、触摸不触发UI点击避免误触、按键可跳特定页面。MQ和邮箱在RT-Thread中底层实现非常接近——都是基于链表管理IPC消息——不存在性能差异。邮箱的设计定位是"允许传递4字节值而非复制固定大小缓冲区"，正适合需要区分来源的通知场景。</p>` },
-
-      // ========== 个人项目 - GUI优化 ==========
-      { id: "ri-p16", tags: ["GUI","LVGL","性能","高频"], q: "[项目] 页面栈怎么做到15页降到2页（87%内存）？SPI DMA怎么提帧率（40%）？", a: `<p><strong>87%内存节省：</strong>GUI Guider生成15个screen全部编译期创建，控件对象挤满SRAM。改静态页面栈——Push时创建screen，Pop时lv_obj_del递归释放子控件。任何时刻只保留栈顶和上一页共2个screen，控件内存降约87%。</p><p><strong>40%帧率提升（12→20fps）：</strong>LVGL双缓冲Partial Render——分配两个15行高的缓冲区。LVGL在Buffer1渲染当前条带时，DMA在后台把Buffer2上一条带的像素发到LCD。逐像素全屏约85ms（12fps）→ DMA流水线约50ms（20fps），提升约40%。DMA把SPI传输从CPU阻塞等待变为DMA后台搬运，CPU可以并行做渲染计算。</p>` },
-
-      // ========== 个人项目 - 遇到的问题 ==========
-      { id: "ri-p17", tags: ["调试","IPC","高频"], q: "[项目] 在项目中遇到过什么问题？具体怎么解决的？（唤醒通知+传感器周期+优先级卡顿）", a: `<p><strong>问题一——唤醒通知用MQ分不清唤醒源：</strong>息屏模式下按键/触摸/充电/抬腕四种操作都能唤醒手表，MQ每条消息只传1字节——四种源发的都是同一个1，idle线程收后不知道是谁唤醒的。改用RT-Thread邮箱替代MQ——每消息4字节传枚举值（KEY=1/TOUCH=2/CHARGE=3/WRIST=4），idle线程switch-case做差异化处理。</p><p><strong>问题二——传感器轮询周期和注释不一致，实际读IMU频率比预期慢十倍：</strong>基准延时500ms→IMU条件++imu_tick>=2→2×500ms=1秒才读一次，注释标的却是"每100ms"——差了十倍。另外AHT20每2秒触发80ms转换等待（os_thread_delay_ms阻塞），排在后面的传感器数据晚80ms才更新。解决：基准延时降为50ms→废弃三个独立静态计数器→改为单一计数器取模分频（tick%2→IMU 100ms/tick%10→心率500ms/tick%40→温湿度2s），所有传感器基于同一时间基准。</p><p><strong>问题三——LVGL被传感器I2C抢占导致画面卡顿：</strong>原来传感器优先级高于LVGL→每次I2C忙等时LVGL定时到了也无法渲染→画面每0.5秒卡一次。解决：LVGL提最高优(7)、sensor降低优(11)。LVGL苏醒时不管sensor在做什么立刻抢占CPU。sensor数据晚十几ms更新功能无影响——UI下一次500ms刷新时自然拿到最新值。</p>` },
-
-      // ========== 面试官追问 ==========
-      { id: "ri-p18", tags: ["追问","I2C","GPIO"], q: "[追问] 软件I2C怎么实现的？为什么不用硬件I2C？", a: `<p><strong>实现：</strong>用GPIO开漏输出+os_udelay微秒延时模拟时序。起始条件先拉低SDA再拉低SCL，停止条件先释放SCL再释放SDA。发送字节从高位起逐位输出、每拉低SCL后延时再拉高形成时钟脉冲，第9位释放SDA读ACK。</p><p><strong>为什么不用硬件I2C：</strong>STM32F4的硬件I2C有已知Bug——Slave拉低SCL导致总线死锁后不会自动恢复，整个I2C总线挂死。软件I2C移植性好——换MCU只改GPIO和延时，不用重新配寄存器。缺点：os_udelay忙等期间不关中断→被抢占时位时序可能被打断（传感器线程优先级已降到11，对I2C影响是插入额外延迟而非翻转位值，通信不会出错）。</p>` },
-      { id: "ri-p19", tags: ["追问","DMA","ADC"], q: "[追问] DMA乒乓缓冲怎么工作的？为什么比单缓冲好？", a: `<p><strong>实现：</strong>分配64半字连续缓冲区——前32半字Buffer0、后32半字Buffer1。ADC通过DMA循环模式持续往这填采样值。DMA填满前32半字触发半满中断→CPU立刻处理Buffer0的数据（算均值/转电压）。DMA继续往后32半字填数据，完全不受CPU处理Buffer0的影响。填满Buffer1触发全满中断→CPU处理Buffer1。如此循环。</p><p>单缓冲：ADC采样完一批→CPU处理→CPU处理完再启动下一批。CPU处理期间ADC停等。乒乓缓冲下DMA永远在采样，CPU永远在处理已完成半区，两不阻塞。CPU只在半满和全满两个中断各做一次32点均值运算，其余时间完全释放。</p>` },
-      { id: "ri-p20", tags: ["追问","迁移","GD32"], q: "[追问] GD32F405和STM32F411的代码迁移需要改哪些？", a: `<p>只需改系统抽象层的<strong>8个</strong>hal_*_stm32.c文件和1个board_watch1.h引脚定义文件。每个_stm32.c改成_gd32.c，里面调GD32固件库替代STM32 HAL——gpio_init()替代HAL_GPIO_Init()、spi_init()替代HAL_SPI_Init()。外设寄存器基地址一样（ARM Cortex-M标准映射0x40000000），只是库函数名和参数枚举值不同。board_watch1.h改引脚定义宏——PA1还是PA1。</p><p>上层drivers、services、app三个目录共<strong>50+文件零改动</strong>。换芯片工作量约2-3天。约80%代码直接复用。</p>` },
-      { id: "ri-p21", tags: ["追问","SRAM","栈"], q: "[追问] SRAM够用吗？线程栈大小怎么定的？为什么选RT-Thread？", a: `<p><strong>SRAM使用：</strong>LVGL帧缓冲双缓冲每块240×15×2+内部对象管理≈22KB、六个线程栈（LVGL 7KB+sensor 1KB+ble 1KB+idle 256B+stop 512B+key 256B）≈10KB、内核≈4KB、总计≈36-40KB。GD32F405有192KB SRAM，剩150KB+余量。</p><p><strong>栈大小确定：</strong>编译时启用RT_USING_OVERFLOW_CHECKER→运行时list_thread看max used百分比→留30%余量作为最终值。</p><p><strong>为什么选RT-Thread而非FreeRTOS：</strong>RT-Thread组件生态更完整——设备框架/文件系统/网络协议栈/finsh Shell命令行内核自带。finsh调试阶段极有价值——串口终端敲list_thread看栈使用率、free看内存分布。而且我用OSAL封装了RT-Thread API——将来换FreeRTOS只改OSAL层5个.c文件，上层代码不动。</p>` },
-      { id: "ri-p22", tags: ["追问","软硬件"], q: "[追问] 在这个项目中你既是嵌入式开发又涉及硬件选型，软硬件边界怎么划分？", a: `<p>硬件侧我做的是外设选型（MAX30102/MPU6050/ST7789/KT6368/AHT20）和原理图评审——确认I2C地址不冲突、SPI片选独立、中断引脚够用。软件侧我负责全部固件——从启动代码到LVGL UI到BLE协议栈到OTA。</p><p><strong>软硬件协作的典型场景：</strong>比如MAX30102的INT引脚——硬件上拉到MCU的GPIO，软件配置为下降沿中断。调试时发现中断偶尔不触发→示波器量INT引脚→发现是OD输出+上拉电阻偏大导致上升沿太慢→加小电阻解决。这个问题本质上是软硬件边界不清晰——硬件觉得"拉个电阻就行"，软件觉得"中断应该能触发"，实际是信号完整性卡在中间。现在我评审原理图时会专门关注开漏引脚的上升时间。</p>` },
-      // ========== 技术深度问答 ==========
-      { id: "ri-30", tags: ["RT-Thread","任务切换","进阶"], q: "RT-Thread中任务切换的完整流程是怎样的？从SysTick到PendSV讲一下", a: `<p><strong>完整链路：</strong>SysTick中断→<code>rt_os_tick_callback</code>→更新全局tick→递减当前线程剩余时间片。若时间片归零→<code>rt_thread_yield()</code>→<code>rt_schedule()</code>选最高优先级就绪线程→<code>rt_hw_context_switch()</code>悬起PendSV。SysTick退出后，PendSV_Handler执行真正上下文切换：保存当前线程R4-R11→恢复下一个线程寄存器→完成切换。</p><p><strong>软定时器触发高优先级任务抢占的情况：</strong><code>rt_timer_check()</code>在同一个SysTick_Handler中执行超时回调（如<code>rt_sem_release</code>唤醒高优先级线程）。该线程进入就绪态后，即使当前线程时间片未用完，调度器通过全局优先级位图检测到更高优先级就绪线程→<code>rt_schedule()</code>主动触发PendSV→立即抢占。</p><p><strong>关键设计：</strong>利用Cortex-M的PendSV（优先级最低）实现上下文切换——确保在所有ISR处理完毕后才做切换，不打断正在执行的ISR。</p>` },
-      { id: "ri-31", tags: ["RT-Thread","FreeRTOS","对比"], q: "RT-Thread相比FreeRTOS多了哪些组件？", a: `<ul><li><strong>设备框架(rt_device)</strong>：统一设备操作接口（rt_device_find/read/write），方便驱动复用，类似Linux设备模型</li><li><strong>Finsh Shell控制台</strong>：交互式命令行，支持查看线程/内存/设备、执行函数，嵌入式调试利器</li><li><strong>虚拟文件系统(DFS)</strong>：支持FAT/LittleFS/NFS等，统一VFS接口</li><li><strong>SAL套接字抽象层</strong>：屏蔽底层网络协议栈差异（lwIP/AT Socket），应用层无感知切换</li><li><strong>软件包生态</strong>：400+第三方package可通过menuconfig一键集成（LVGL/AT指令/MQTT/HTTP等）</li><li><strong>传感器框架</strong>：已支持100+传感器驱动</li></ul><p>FreeRTOS只提供核心调度+IPC，其余需自行集成。RT-Thread是一个完整的IoT OS平台。</p>` },
-      { id: "ri-32", tags: ["Linux","驱动","对比"], q: "Linux驱动开发和STM32裸机/RTOS驱动开发最大的区别是什么？", a: `<p><strong>三大核心区别：</strong></p><ol><li><strong>架构不同</strong>：Linux有统一的设备模型（platform_device/driver），驱动必须遵循框架规范（probe/remove/fops）；STM32驱动自由度高，直接操作寄存器即可</li><li><strong>内存管理不同</strong>：Linux有虚拟内存，驱动运行在内核态，不能直接访问物理地址，必须先ioremap成虚拟地址；STM32是物理内存，直接访问寄存器地址</li><li><strong>并发控制不同</strong>：Linux是多用户多任务系统，驱动需考虑多进程同时访问（用spinlock/mutex保护）；RTOS虽有多任务但没有进程概念，共享内存空间中并发控制相对简单</li></ol><p>Linux驱动开发门槛更高——需要理解内核框架、设备模型、并发保护、内核内存管理等。但一旦掌握了框架，写驱动是有章可循的；STM32驱动更自由但也更容易写出不规范代码。</p>` },
-      { id: "ri-33", tags: ["Bootloader","跳转"], q: "Bootloader中跳转到应用程序的具体步骤是什么？", a: `<pre><code class="language-c">#define APP_ADDR 0x08008000
-
-void jump_to_app(void) {
-    // 1. 检查APP是否存在（读EEPROM标志或APP起始地址内容）
-    if (*(uint32_t*)APP_ADDR == 0xFFFFFFFF) return; // APP不存在
-
-    // 2. 关闭SysTick和全局中断
-    SysTick->CTRL = 0;
-    __disable_irq();
-
-    // 3. 重定向向量表
-    SCB->VTOR = APP_ADDR;
-
-    // 4. 设置MSP为APP的栈顶地址
-    __set_MSP(*(uint32_t*)APP_ADDR);
-
-    // 5. 获取APP复位向量并跳转
-    void (*app_reset_handler)(void) = (void (*)(void))*(uint32_t*)(APP_ADDR + 4);
-    app_reset_handler();  // 永不返回
-}</code></pre><p><strong>关键点：</strong>关SysTick（防止跳转过程中产生中断）、关全局中断、设置VTOR（APP使用自己的向量表）、设置MSP（APP的栈指针从APP固件头读出）、函数指针跳转。</p>` },
-      { id: "ri-34", tags: ["设备树","Linux"], q: "设备树在哪一步加载？作用是什么？为什么需要设备树？", a: `<p><strong>加载时机：</strong>设备树（DTB）由U-Boot加载（从eMMC/SD/NAND读到内存指定地址）→启动内核时通过寄存器R2传递DTB地址→内核在<code>start_kernel</code>之前的<code>setup_machine_fdt</code>中解析设备树，建立设备模型。</p><p><strong>作用：</strong>以结构化方式描述板级硬件信息（寄存器地址、中断号、时钟、GPIO、总线拓扑）。</p><p><strong>为什么需要：</strong>在设备树之前，ARM平台每个板子要写board-xxx.c板级文件，硬件变一点就要改内核代码重新编译。引入设备树后：(1)硬件信息与内核代码解耦 (2)同一个zImage+不同dtb适配多个硬件平台 (3)驱动不再写死地址/中断号 (4)改硬件只需改dts，无需重新编译内核。</p>` },
-      { id: "ri-35", tags: ["Linux","IPC"], q: "Linux进程间通信(IPC)方式及使用场景？", a: `<table><tr><th>方式</th><th>特点</th><th>使用场景</th></tr><tr><td>匿名管道</td><td>半双工、仅父子进程</td><td>popen()读取命令输出</td></tr><tr><td>有名管道(FIFO)</td><td>无亲缘进程可通信</td><td>模拟传感器数据源</td></tr><tr><td>消息队列</td><td>消息边界清晰、有序传递</td><td>小块结构化数据传递</td></tr><tr><td>共享内存</td><td>最快速（零拷贝）</td><td>视频帧传递（配合信号量同步）</td></tr><tr><td>信号</td><td>异步通知、信息量少</td><td>SIGIO异步I/O事件</td></tr><tr><td>Socket</td><td>跨网络/本地通信</td><td>本机进程间(Unix domain)或网络</td></tr></table>` },
-      { id: "ri-36", tags: ["协议","SPI","I2C","对比"], q: "SPI和I2C在总线协议上的区别？什么场景选哪个？", a: `<table><tr><th>特性</th><th>SPI</th><th>I2C</th></tr><tr><td>信号线</td><td>4根(MOSI/MISO/SCLK/CS)</td><td>2根(SDA/SCL)</td></tr><tr><td>时钟与应答</td><td>主机产生时钟，无应答</td><td>主机产生时钟，每字节后有ACK/NACK</td></tr><tr><td>多主仲裁</td><td>不支持，通过CS区分从机</td><td>支持，通过SDA线与仲裁（低电平优先）</td></tr><tr><td>速率</td><td>可达几十MHz</td><td>100k/400k/1MHz</td></tr><tr><td>全/半双工</td><td>全双工</td><td>半双工</td></tr></table><p><strong>选型经验（项目实践）：</strong>心率传感器EM7028用I2C（引脚少、400kbps足够），LCD屏幕用SPI（需要高刷新率、MHz级传输）。规则：高速大量数据→SPI；引脚紧张→I2C。</p>` },
-      { id: "ri-37", tags: ["调试","面试技巧"], q: "全局变量的值与预期不一样，怎么排查？", a: `<ol><li><strong>定位所有写入点</strong>：查看源码中哪些位置修改该变量，检查是否有不该写的地方在写</li><li><strong>检查越界覆盖</strong>：在变量前后放置哨兵字节（Magic Number），若哨兵被修改说明是越界覆盖</li><li><strong>数据断点（Watchpoint）</strong>：调试器中设硬件断点，该地址被写入时自动中断，查看调用栈——最快的方法</li><li><strong>并发修改</strong>：若被中断和主循环同时访问，临时加临界区验证是否竞态条件引起</li><li><strong>volatile检查</strong>：若变量在中断中修改，确认声明为volatile，否则编译器可能用寄存器缓存旧值</li><li><strong>编译器优化</strong>：降低优化级别（-O0），看问题是否消失，确认是否与优化相关</li></ol>` },
-      { id: "ri-38", tags: ["C语言","内存对齐"], q: "怎么防止结构体内存对齐？什么时候需要紧凑排列？", a: `<p><strong>方法：</strong>用<code>#pragma pack(1)</code>或<code>__attribute__((packed))</code>。</p><pre><code class="language-c">struct __attribute__((packed)) packed_struct {
-    char a;    // 1 byte
-    int b;     // 4 bytes（本来有3 byte padding）
-    short c;   // 2 bytes
-}; // 总大小7字节而不是12字节</code></pre><p><strong>需要紧凑排列的场景：</strong></p><ul><li>通信协议帧解析（帧格式按字节紧密排列，padding会破坏解析）</li><li>硬件寄存器映射（寄存器布局由硬件固定）</li><li>Flash/EEPROM中存储结构体（节省空间+读写一致性）</li></ul><p><strong>代价：</strong>非对齐访问在某些架构上可能触发HardFault（Cortex-M0），或效率降低（需要多次字节组合）。只在必要时使用。</p>` },
-      { id: "ri-39", tags: ["RTOS","实时性"], q: "线程时间片设为5ms，实时性高吗？", a: `<p>5ms时间片不算高实时，属于<strong>常规配置</strong>。RT-Thread是<strong>抢占式内核</strong>，高优先级任务可以<strong>立即抢占</strong>低优先级任务——实时性由调度机制（抢占+优先级）决定，不是由时间片决定。时间片只影响同优先级任务间的轮转频率。</p><p>5ms可满足一般嵌入式场景（如穿戴设备的心率检测/UI刷新）。工业/汽车级高实时场景（如电机FOC控制/ABS制动）需要：</p><ul><li>更短时间片（1ms或更小）</li><li>更高的tick频率（如10kHz）</li><li>甚至不用tick调度而用硬件定时器直接触发最高优先级任务</li></ul>` },
-
-      // ========== 开放性问题 ==========
-      { id: "ri-40", tags: ["HR","面试技巧"], q: "[面试官常问] 如何看待AI？日常会使用AI工具吗？", a: `<p>我认为AI（特别是大语言模型）已经成为软件开发中<strong>非常高效的辅助工具</strong>。它不能替代工程师对系统底层原理的理解和调试能力，但可以极大提升学习和生产效率。</p><p><strong>我的实际使用方式：</strong></p><ol><li><strong>快速理解新协议/芯片手册</strong>：看EM7028传感器手册时，让AI帮忙总结寄存器配置流程，然后我再对照手册仔细验证——相当于一个能快速定位关键信息的"智能助手"</li><li><strong>代码Review辅助</strong>：把核心代码片段让AI检查潜在边界问题，但不盲从——AI给的建议我会逐条分析合理性</li><li><strong>面试准备</strong>：让AI基于我的项目模拟面试官追问，发现回答中的薄弱点</li></ol><p><strong>底线：</strong>所有AI输出都要经过自己的理解验证。不理解原理的代码绝对不能直接使用。AI是工具，人做决策。</p>` },
-      { id: "ri-41", tags: ["项目","难点","面试技巧","高频"], q: "[面试官常问] 你这个项目最大的技术难点是什么？怎么解决的？", a: `<p><strong>最大的难点不是某个具体Bug，而是架构决策。</strong></p><p><strong>决策一：IPC边界问题。</strong>一开始想在层间全用消息队列做异步解耦，画完时序图发现一次传感器读取需要4次上下文切换，延迟高到不可接受。查阅PX4飞控和ESP-IDF源码后确认业界标准是"垂直直接调用+水平消息队列"，纠正了设计。</p><p><strong>决策二：设备管理过度设计。</strong>最初想引入Linux platform bus做设备注册/匹配/probe，写完伪代码后发现项目只有10个外设且编译期全部已知，probe/match的代码量远超实际价值。最终用全局数组+名称查找替代，代码从300+行缩减到60行。</p><p><strong>核心收获：</strong>架构不是越复杂越好，适合项目规模的才是好架构。这两个决策让我在"解耦"和"简单"之间找到了平衡点。</p>` },
-      { id: "ri-42", tags: ["RTOS","调试"], q: "[项目] 高优先级任务占着CPU导致低优先级任务饿死，你怎么解决？", a: `<p><strong>遇到过。</strong>项目初期心率算法任务优先级设为3（较高），计算耗时约50ms，导致GUI更新任务（优先级6）长时间得不到运行，界面卡顿。</p><p><strong>解决方案：</strong></p><ol><li><strong>让出CPU</strong>：心率任务在完成一次计算后主动<code>rt_thread_delay(10)</code>挂起10ms，给GUI任务执行窗口——这是最简单的方案</li><li><strong>降低计算频率</strong>：分析发现没必要每次心跳都更新显示，改为每5次计算刷新一次GUI</li><li><strong>计算分段</strong>：把50ms的算法拆成多个小段，每段执行完主动yield，避免长时间霸占CPU</li></ol><p>根本原则：高优先级任务不能长时间占用CPU。必须给低优先级任务留出执行窗口（通过delay/yield或提高tick频率）。</p>` },
-      { id: "ri-43", tags: ["调试","FIFO","传感器"], q: "[项目] EM7028心率传感器数据突然归零的问题怎么排查和解决的？", a: `<p><strong>现象：</strong>设备运行几分钟后心率数据突然归零，重启后恢复。</p><p><strong>排查过程：</strong></p><ol><li>示波器抓I2C总线波形→确认数据传输仍在进行，传感器没死</li><li>读数据手册→发现传感器默认采样率<strong>100Hz</strong>，内部FIFO大小有限（32 samples）</li><li>分析代码→读取周期设的是<strong>100ms（10Hz）</strong>——远低于传感器输出速率（100Hz）</li><li>RT-Thread任务调度导致实际读取间隔不稳定→传感器每秒产生100个样本但代码每秒只取10个→FIFO在约0.3秒内溢出→后续数据全部丢失→归零</li></ol><p><strong>解决：</strong>配置传感器采样率降到10Hz匹配读取周期、增加连续读失败3次则软复位传感器的恢复逻辑。此后数据稳定。</p>` },
-      { id: "ri-44", tags: ["OTA","AB分区"], q: "[追问] 汽车OTA升级AB分区机制如何保证安全？", a: `<p>AB分区机制：Flash分为A区（当前运行固件）和B区（升级目标固件）。</p><p><strong>安全保障机制：</strong></p><ol><li><strong>写入阶段</strong>：固件分块写入B区，每块<strong>CRC32校验</strong>→全部写入后验证<strong>ECDSA数字签名</strong>→防传输错误和固件篡改</li><li><strong>切换阶段</strong>：设置升级标志位→重启→Bootloader检测标志→验证B区固件完整性（<strong>SHA256+签名</strong>）→验证通过才切换活动分区</li><li><strong>回滚机制</strong>：B区启动后执行健康检查（心跳正常+通信OK+功能自测）→通过则<strong>提交</strong>固件（commit→A区成为下次升级备区）→失败则**自动回滚A区**</li></ol><p><strong>防变砖的核心：</strong>Bootloader独立不可升级。无论固件怎么坏，Bootloader始终完好，能读取AB分区标志并选择正确（或上一个完好）的固件启动。</p>` },
-      { id: "ri-45", tags: ["运动补偿","算法","进阶"], q: "[追问] PPG心率算法如果有运动干扰怎么办？", a: `<p><strong>当前版本没有做运动补偿，这是算法的一个局限。</strong></p><p><strong>运动伪影来源：</strong>手腕晃动→传感器和皮肤距离变化→DC基线漂移；肌肉收缩→血液灌注变化→AC信号被调制。</p><p><strong>改进方向（两个方案）：</strong></p><ol><li><strong>自适应噪声门控</strong>：利用MPU6050三轴加速度合成值——超过阈值说明用户在运动→标记这段PPG数据为不可靠→不参与心率计算。简单有效但会丢失运动期间的心率数据</li><li><strong>LMS自适应滤波</strong>：把加速度信号作为噪声参考输入→自适应滤波器从PPG信号中减去运动相关分量。能恢复运动期间的心率，但算法复杂度高、需要调参</li></ol><p>这两个方案的核心思路文献中都有（TROIKA、JOSS等），但当前项目版本还没实现。如果在面试中被追问到这个，坦诚说明局限+提出改进方向比假装完美更有说服力。</p>` },
-      { id: "ri-46", tags: ["CI","自动化测试"], q: "[追问] 测试用例集成到CI流程中，是怎么实现的？", a: `<p><strong>流程：</strong>开发者提交代码→CI Jenkins Pipeline触发→自动编译→烧录目标板→运行STL测试套件→采集结果→生成报告。</p><p>STL的GTC测试用例作为测试套件的一部分，每次代码变更后自动在目标硬件上运行。如果GTC测出时间偏差超限→测试失败→CI发邮件通知提交者→代码需修复后才能合入。</p><p>此外，Tessy单元测试也在CI中有独立Pipeline，运行在PC模拟环境（不依赖硬件），检查代码覆盖率是否达标（>85%）。这种<strong>软硬结合的双层测试</strong>同时保证了代码逻辑正确性和硬件行为正确性。</p>` }
+      {
+        id: "resume-self-intro", priority: "must", difficulty: "base", tags: ["自我介绍", "必问", "60秒"],
+        q: "请做一个和嵌入式岗位相关的自我介绍。",
+        brief: "我叫廖洲，主线是 MCU/RTOS 实时系统与车载 Linux/CAN。三段实习让我分别接触了量产测试、BSP 和版本交付，两个个人项目把传感器/OTA 与 CAN 可靠性串起来。",
+        a: `<p><strong>建议口述（约 70 秒）：</strong></p><p>“我叫廖洲，本科是物联网工程，目标岗位是嵌入式软件工程师。我的技术主线有两条：一条是以 STM32/RT-Thread 为代表的 MCU 实时系统，另一条是 Linux 用户态、SocketCAN 和车载诊断。实习中我在经纬恒润做过 BCM 的 CAN/LIN 联调和量产测试，在海康参与过 SoC 的 UART、SPI、DMA、DTS 和启动优化，目前在锐明参与车载版本交付、TESSY 测试自动化和缺陷回归。个人项目里，我做过健康穿戴，重点是传感器驱动、PPG 算法、LVGL、OTA 和低功耗；也做过 i.MX6ULL + S32K144 的 CAN 黑匣子，重点是事件循环、异常检测、故障前后快照、可靠落盘和 Supervisor 恢复。我比较擅长把问题拆到硬件、驱动、协议、任务和测试证据几个层次，并用示波器、日志、统计数据把问题闭环。”</p><p>结尾停住，等面试官选择项目，不要主动把所有技术点一次说完。</p>`,
+        followups: [
+          { q: "为什么实习和个人项目跨度这么大？", a: "共同主线是嵌入式系统的可观测性和可靠性：实习偏平台/量产质量，项目偏功能架构/故障恢复。跨度大但每段都能落到 C、外设、协议、调试和测试。" },
+          { q: "你最熟的项目是哪一个？", a: "按岗位选择。MCU 岗先讲穿戴，Linux/车载岗先讲 CAN 黑匣子；讲清自己负责的边界和一个可量化结果，再等追问。" }
+        ],
+        evidence: "简历全部经历；穿戴代码 watch1；CAN 项目 docs/14_项目面试速成与题库.md",
+        boundary: "自我介绍只说已经能用自己的话解释并能指出证据的技术点。",
+        caution: "不要把团队参与说成独立主导，也不要把测试通过说成产品量产指标。"
+      },
+      {
+        id: "resume-project-choice", priority: "must", difficulty: "base", tags: ["简历", "项目选择", "表达"],
+        q: "你会怎样介绍简历上的两个个人项目？为什么这样排序？",
+        brief: "先用穿戴展示 MCU/RTOS/传感器的完整闭环，再用 CAN 黑匣子展示 Linux/CAN/可靠性；顺序随岗位切换。",
+        a: `<p>每个项目只回答四件事：<strong>为什么做、系统怎么分层、我负责的难点、如何验证</strong>。</p><ol><li><strong>穿戴（MCU 方向）</strong>：GD32F405 + RT-Thread + LVGL，传感器采集进入服务层，再通过消息队列到 UI；重点讲 PPG、DMA、OTA、低功耗中的一个难点。</li><li><strong>CAN 黑匣子（Linux/车载方向）</strong>：i.MX6ULL 采集 CAN，S32K144 模拟 ECU 和故障源；重点讲 epoll 事件循环、异常快照、.bbx 恢复和 Supervisor。</li></ol><p>如果岗位偏车载 Linux，就把黑匣子放前面；如果岗位偏 MCU，就把穿戴放前面。项目排序不是“哪个更高级”，而是先给面试官一条与岗位最相关的证据。</p>`,
+        followups: [
+          { q: "你在项目中具体写了哪些代码？", a: "用文件和模块回答：穿戴可指向 Drivers/services/app/hal；黑匣子可指向 src/can_source.c、detector.c、ring_buffer.c、binlog.c、supervisor.c 和 tests。不要只说‘负责架构’。" },
+          { q: "项目最大的技术难点是什么？", a: "选择一个能讲完闭环的问题：穿戴选‘传感器数据到 UI 的实时性与并发’，黑匣子选‘接收路径不能被 SD I/O 阻塞，同时还要保留故障前窗口’。按现象→假设→证据→修改→回归回答。" }
+        ],
+        evidence: "简历项目经历；watch1/app、watch1/services、can-blackbox-worktree/src",
+        boundary: "不要在同一个回答里混用两个项目的指标。",
+        caution: "数字要带条件，例如‘测试时’‘当前 can0 统计’‘在静止手指样本下’。"
+      },
+      {
+        id: "resume-why-embedded", priority: "must", difficulty: "base", tags: ["动机", "HR+技术"],
+        q: "为什么选择嵌入式软件，而不是纯软件或硬件？",
+        brief: "我喜欢软硬件边界明确、结果可测量的问题：既要读手册和波形，也要用 C、任务和测试把功能做成可维护系统。",
+        a: `<p>不要只说“喜欢底层”。可以这样展开：</p><ul><li>结果有物理反馈：报文、波形、传感器数值、功耗和启动时间都能测量。</li><li>问题需要跨层定位：同一个“收不到数据”，可能是供电、引脚复用、时序、DMA、协议解析或任务阻塞。</li><li>我更愿意承担长期运行、异常恢复和测试证据，而不只实现一条正常路径。</li></ul><p>最后补一句与岗位匹配的话：“实习让我看到量产交付对可回归、可追溯的要求，所以希望在真实产品中继续做平台和可靠性。”</p>`,
+        followups: [{ q: "你觉得嵌入式最难的地方是什么？", a: "不是 API 多，而是边界多且问题常常跨层。我的方法是先做最小可验证实验，再逐层收敛，不靠猜。" }],
+        evidence: "三段嵌入式实习；两个个人项目；获奖经历",
+        boundary: "回答动机时不要把‘喜欢挑战’当成唯一内容，要落到实际行为。",
+        caution: "避免贬低纯软件或硬件岗位。"
+      },
+      {
+        id: "resume-skill-precision", priority: "must", difficulty: "base", tags: ["技能", "边界", "必问"],
+        q: "简历写了‘精通 C/RTOS’，你如何证明？",
+        brief: "把‘精通’拆成可展示的边界：能写、能读内核/驱动、能定位并发问题、能用测试和工具验证；不会把没做过的部分说成做过。",
+        a: `<p>建议按证据回答：</p><ol><li><strong>C：</strong>能解释对象生命周期、指针/数组、对齐、volatile 与原子性、链接属性；能写环形缓冲、链表和安全的资源清理。</li><li><strong>RTOS：</strong>在穿戴中使用 RT-Thread 线程、消息队列、邮箱、定时器和设备注册；能说明 ISR/线程上下文边界、优先级和栈水位如何验证。</li><li><strong>Linux：</strong>项目使用 SocketCAN、epoll、timerfd、signalfd、pthread 和文件恢复；不把使用现有 FlexCAN 驱动说成自研内核驱动。</li></ol><p>最后主动说“我对某个模块的深度以代码和测试证据为准”。这会把追问引向你真正准备过的部分。</p>`,
+        followups: [{ q: "你不会的内容怎么处理？", a: "先明确已知边界，再给出排查/学习路径。例如没有独立写过 CAN 内核驱动，就说明使用的是现有驱动，但能从 DTS、probe、net_device 到 SocketCAN 追链路。" }],
+        evidence: "watch1/osal、watch1/services、can-blackbox-worktree/src 与 tests",
+        boundary: "精通是简历措辞，面试回答必须换成可验证能力。",
+        caution: "不要背 API 清单代替工程证据。"
+      },
+      {
+        id: "resume-mcu-conflict", priority: "must", difficulty: "trap", tags: ["风险", "GD32", "STM32", "必须统一口径"],
+        q: "简历写 GD32F405，但现有工程里的 watch.ioc 和代码明显是 STM32F411，面试时怎么处理？",
+        brief: "先统一事实再回答：当前仓库直接证据是 STM32F411CEU6；如果简历的 GD32 是另一版实机，必须准备对应工程和照片，否则不能把两者混为一谈。",
+        a: `<p>这是面试前必须解决的口径风险。现有工程的 <code>watch.ioc</code> 指向 <code>STM32F411CEU6</code>，<code>board_watch1.h</code> 和 OTA 注释也按 STM32F411 的 Flash/扇区写。如果面试官问芯片型号，不能临场含糊。</p><p><strong>三种诚实说法：</strong></p><ul><li>确实有 GD32F405 最终版本：准备 GD32 工程、编译产物或实机照片，说明“当前仓库是 STM32F411 适配/验证分支，接口层保持一致”。</li><li>只有这份 STM32F411 工程：尽快把简历改为 STM32F411，或改成“面向 GD32F405 的接口抽象，当前样机在 STM32F411 验证”。</li><li>还没确认：不要说“GD32 和 STM32 完全兼容”，只说明迁移点是启动文件、时钟、Flash 擦除、HAL/寄存器和链接脚本，并承诺以实际版本为准。</li></ul>`,
+        followups: [{ q: "GD32 到 STM32 迁移要改什么？", a: "启动文件和 CMSIS 头文件、时钟树、Flash 擦除粒度/地址、外设 HAL 或寄存器、链接脚本、下载工具、低功耗和中断向量；不能只替换芯片宏。" }],
+        evidence: "watch1/watch.ioc: Mcu.Name=STM32F411C(C-E)Ux；watch1/board/board_watch1.h",
+        boundary: "这一题是风险提示，不是让你编造‘迁移完成’。",
+        caution: "在网站里把它标记为面试前必核对项。"
+      },
+      {
+        id: "resume-ai-usage", priority: "should", difficulty: "base", tags: ["AI", "工程方法", "锐明"],
+        q: "你如何使用 AI 工具？怎样避免生成错误代码？",
+        brief: "AI 用于检索、拆任务、生成测试骨架和解释日志；关键设计、边界条件、硬件时序和合入决定由我负责，并经过编译、静态分析、单测、实机和人工清单。",
+        a: `<p>按一个闭环回答：<strong>上下文约束 → 小步生成 → 人工审查 → 自动验证 → 记录结果</strong>。</p><ol><li>先给接口、编译器、MISRA/项目规范、不可修改的边界，避免让模型凭空设计。</li><li>让 AI 生成局部函数、测试输入矩阵或日志分析脚本，不直接生成整套驱动并粘贴。</li><li>审查内存所有权、ISR 可调用 API、整数宽度、超时、错误路径和并发顺序。</li><li>用编译器告警、TESSY/Polyspace、主机单测、波形/日志和实机回归验证。</li></ol><p>可以说：“AI 加快了准备和重复劳动，但不能替我提供硬件证据。”</p>`,
+        followups: [{ q: "AI 生成的代码出过问题吗？", a: "准备一个真实例子。没有真实例子时不要虚构；可以说发现过潜在风险，例如把阻塞 API 放进 ISR、忽略整数溢出或错误假设协议字段，并通过审查清单拦截。" }],
+        evidence: "锐明实习简历描述；个人项目的测试脚本和文档沉淀",
+        boundary: "不要把‘会用 Codex’当作技术成果本身。",
+        caution: "不泄露公司代码、客户数据或内部提示词。"
+      },
+      {
+        id: "resume-strength-weakness", priority: "should", difficulty: "base", tags: ["HR", "复盘"],
+        q: "你的优势和需要提升的地方是什么？",
+        brief: "优势是能跨硬件、软件、测试闭环；提升点是把算法与量化验证做得更严格，并用文档和自动化减少记忆依赖。",
+        a: `<p><strong>优势：</strong>遇到问题会先定义现象和观测量，再逐层排查；例如 CAN 项目同时保留原始报文、错误统计、快照和恢复日志，方便复盘。</p><p><strong>提升点：</strong>个人项目有些指标还没有形成完整对照实验，尤其是穿戴的心率误差、帧率和功耗。我的改进计划是固定测试协议、保存原始数据、给出基线/优化版对照，并把结果纳入回归。</p><p>这个答案既不否认简历指标，也主动划出证据边界，比“我没有缺点”更可信。</p>`,
+        followups: [{ q: "你最近一次复盘是什么？", a: "可以讲黑匣子把写线程创建早于 signalfd 导致信号路径不一致，后来调整信号阻塞/创建顺序并新增回归测试。" }],
+        evidence: "CAN 开发全过程记录第 5.12 节；测试记录",
+        boundary: "只讲真实的改进动作，避免万能模板。",
+        caution: "不要把‘追求完美’当缺点。"
+      },
+      {
+        id: "resume-career-fit", priority: "should", difficulty: "base", tags: ["岗位匹配", "反问"],
+        q: "为什么投这个岗位？入职后想做什么？",
+        brief: "把岗位 JD 映射到已有证据：MCU/RTOS、BSP/Linux、CAN/诊断、测试与交付；入职后先补齐产品约束，再承担可回归的模块。",
+        a: `<p>回答结构：<strong>岗位关键词 → 我的证据 → 需要补齐的差距 → 近期产出</strong>。例如车载 BSP 岗可以说：“我在海康接触过 DTS 和外设适配，在 CAN 黑匣子中做过 SocketCAN 用户态链路；希望先把平台启动和驱动调通，再负责一个接口的测试与故障闭环。”</p><p>反问面试官时可问：目标模块的实时性/安全等级、主要调试链路、单元测试和实机测试如何接入 CI、应届生前三个月的交付边界。</p>`,
+        followups: [{ q: "你能接受测试/维护工作吗？", a: "能。嵌入式的测试、日志和回归是交付的一部分；我更关注能否通过观测量和自动化让维护工作产生工程价值。" }],
+        evidence: "三段实习职责与项目技术栈",
+        boundary: "根据真实 JD 替换岗位关键词。",
+        caution: "不要泛泛说‘贵公司平台好、发展快’。"
+      }
+    ]
+  },
+  {
+    id: "internships", name: "三段实习追问", icon: "briefcase-business", track: "resume",
+    desc: "每段实习都按职责、方法、结果、复盘四步回答。没有亲自做过的动作要明确说参与边界。",
+    questions: [
+      {
+        id: "intern-ruiming-delivery", priority: "must", difficulty: "base", tags: ["锐明", "版本交付", "高频"],
+        q: "在锐明负责一个部标机定制版本时，你的交付流程是什么？",
+        brief: "需求澄清→影响分析→方案与接口→实现→自测/冒烟→提测→缺陷回归→版本记录，关键节点有可追溯证据。",
+        a: `<p>我会先把客户需求拆成行为、接口、配置、兼容性和验收条件；再查影响模块和已有回归用例，确定改动边界。实现时保留错误码、日志和配置校验；自测覆盖正常、边界、异常和升级兼容；冒烟通过后提测。缺陷回来时先保留现场（版本、配置、输入、日志），复现后定位根因，修复后做定向回归和相关回归，最后更新版本说明。</p><p>面试官真正想听的是“如何控制改动风险”，而不是“我写了多少行代码”。</p>`,
+        followups: [{ q: "需求说不清时怎么做？", a: "把歧义写成待确认项，给出最小可验收示例和边界；不凭猜测编码。确认后在 issue/评审记录中固化。" }, { q: "冒烟和回归有什么区别？", a: "冒烟验证版本能否启动和跑通主链路；回归验证修复或新功能没有破坏相关旧功能，范围更广。" }],
+        evidence: "简历：车载 D6 V2.0 部标机定制版本职责",
+        boundary: "没有给出具体模块名时，不要临场编造客户需求细节。",
+        caution: "可用‘参与/负责某环节’区分个人贡献。"
+      },
+      {
+        id: "intern-ruiming-tessy", priority: "must", difficulty: "advanced", tags: ["锐明", "TESSY", "MC/DC"],
+        q: "TESSY 自动化流程 Analyze → Import → Execute → Report 具体解决了什么问题？",
+        brief: "把重复 GUI 操作变成可重复流水线，并把测试输入、执行结果、覆盖率和报告产物固定下来；自动化不等于覆盖率天然正确。",
+        a: `<p><strong>Analyze</strong> 解析工程和接口，生成测试环境；<strong>Import</strong> 导入/更新测试数据与桩；<strong>Execute</strong> 批量执行用例并采集结果；<strong>Report</strong> 生成覆盖率和失败摘要。我的工作重点是把项目路径、配置、执行顺序和结果归档固化，减少手工点选导致的漏测和环境漂移。</p><p>对 C0/C1/MC/DC 的回答要谨慎：C0 看语句是否执行，C1 看分支，MC/DC 还要证明每个条件能独立影响决策。覆盖率是风险信号，不是“覆盖率高就没有 Bug”；异常输入、桩行为和需求映射同样要审。</p>`,
+        followups: [{ q: "TESSY 发现问题后如何判断是代码还是测试问题？", a: "先看失败输入、桩返回、预期值和实际值，再在调试器/日志中定位；确认用例是否真正满足前置条件，避免为让用例通过而改预期。" }, { q: "MC/DC 比 C1 多了什么？", a: "C1 只要求决策结果的分支执行；MC/DC 要求每个基本条件都能在其他条件固定时独立改变决策结果。" }],
+        evidence: "简历：打通 TESSY 5.1 Analyze/Import/Execute/Report",
+        boundary: "没有实际做过的覆盖率阈值和工具脚本名称不要补写。",
+        caution: "不要把 700+ 用例全部说成自己从零编写。"
+      },
+      {
+        id: "intern-ruiming-ai-checklist", priority: "should", difficulty: "advanced", tags: ["锐明", "AI", "质量"],
+        q: "AI 辅助研发流程中的人工校验清单包含哪些项？",
+        brief: "接口契约、所有权、并发上下文、错误处理、数值范围、兼容性、测试和敏感信息是最小清单。",
+        a: `<ul><li>接口：输入输出、单位、范围、生命周期和错误码是否与现有调用者一致。</li><li>嵌入式边界：ISR 能否调用、是否会阻塞、volatile/原子性/锁是否匹配、DMA 缓冲区是否仍在使用。</li><li>C 安全：整数提升、符号转换、数组边界、对齐、未初始化、资源释放和超时。</li><li>工程验证：编译告警、静态分析、单测/集成测试、实机日志和回归范围。</li><li>合规：不把客户代码、密钥和内部数据发送到不允许的服务。</li></ul><p>清单的价值是把“我看过了”变成可复核动作。</p>`,
+        followups: [{ q: "你会让 AI 直接改驱动吗？", a: "只在边界明确且有小步补丁、编译和硬件回归时采用；关键时序和电源/中断代码优先自己写或逐行审查。" }],
+        evidence: "简历：需求分析、编码、测试验证的 AI 辅助流程",
+        boundary: "回答流程，不泄露公司内部实现。",
+        caution: "不要用 AI 生成内容替代对代码的理解。"
+      },
+      {
+        id: "intern-haikang-bsp-flow", priority: "must", difficulty: "advanced", tags: ["海康", "BSP", "UART", "SPI", "DMA"],
+        q: "以 SPI 为例，参与 SoC 外设适配和联调时你会怎么走完整链路？",
+        brief: "先核对硬件资源和时序，再改 DTS/pinctrl/clock/interrupt，驱动 probe 注册设备，最后用逻辑分析仪、内核日志和用户态读写验证。",
+        a: `<ol><li>读原理图和芯片手册，确认基址、时钟、CS、模式、频率、中断/DMA 请求线和电平。</li><li>在 DTS 配置 <code>compatible/reg/interrupts/clocks/pinctrl</code>，用 dtc 反编译最终 dtb 检查加载结果。</li><li>驱动通过 <code>of_match_table</code> 匹配，probe 获取资源、ioremap、申请 IRQ/DMA 并注册设备。</li><li>用户态先做最小读写，再用逻辑分析仪看 CS/SCK/MOSI/MISO 的模式、边沿、长度和空闲电平。</li><li>问题定位依次看启动日志、probe 返回码、<code>/proc/interrupts</code>、DMA 完成计数和原始波形。</li></ol>`,
+        followups: [{ q: "驱动 probe 成功但读不到数据怎么办？", a: "分开‘软件没发’和‘硬件没回’：先看调用路径和寄存器配置，再看波形是否有 CS/SCK，确认 mode/频率/位序/CS 时序，最后核对供电、复位和器件地址。" }, { q: "DMA 缓冲区有哪些风险？", a: "生命周期、对齐、方向、长度、cache 一致性和完成回调上下文；DMA 未完成前不能复用或释放缓冲区。" }],
+        evidence: "简历海康 BSP 经历；个人手表也有 SPI DMA/UART DMA 实例",
+        boundary: "项目黑匣子没有自研 FlexCAN 内核驱动，别把用户态工作说成内核开发。",
+        caution: "具体 SoC 型号和寄存器地址按真实实习项目补齐。"
+      },
+      {
+        id: "intern-haikang-dts-failure", priority: "must", difficulty: "advanced", tags: ["海康", "DTS", "调试"],
+        q: "DTS 配置后设备不工作，你如何排查？",
+        brief: "先确认最终 dtb 和节点状态，再看匹配/probe/资源申请，之后才看协议和业务。每一步都要有观测命令或日志。",
+        a: `<ol><li><code>dtc -I dtb -O dts</code> 反编译运行中的 dtb，确认 <code>compatible/status/reg/interrupts/pinctrl</code> 不是源码里“看起来正确”。</li><li>看 <code>dmesg</code>：是否匹配、probe 是否执行、哪个资源申请返回错误。</li><li>看时钟、引脚复用、供电/复位和中断计数；中断不增时再查触发类型、引脚电平和清中断逻辑。</li><li>用最小用户态读写和示波器/逻辑分析仪确认总线真的活动。</li></ol><p>如果是设备树节点禁用导致的“没有设备”，不要直接改驱动绕过；先确认产品硬件是否存在。</p>`,
+        followups: [{ q: "如何区分中断号错和设备没产生中断？", a: "先用轮询读状态寄存器确认设备事件，再看 /proc/interrupts；设备有事件但计数不增，重点查 pinctrl、GIC 映射和触发方式。" }],
+        evidence: "海康实习简历；现有 CAN 文档也提供 DTS→FlexCAN→SocketCAN 链路",
+        boundary: "不凭经验给出目标 SoC 的具体中断号。",
+        caution: "把每条命令和证据对应起来。"
+      },
+      {
+        id: "intern-haikang-uboot", priority: "must", difficulty: "advanced", tags: ["海康", "U-Boot", "启动优化"],
+        q: "U-Boot 快启优化怎么定位瓶颈？",
+        brief: "先分阶段打点，再按启动必需性裁剪驱动、设备树节点和探测次数；每次只改一类并验证升级、存储和回滚路径。",
+        a: `<p>用启动日志或 <code>get_timer()</code> 在 SPL/U-Boot 各阶段打点，区分时钟、存储、网络、USB、设备树和命令等待。然后基于实际启动路径裁剪不需要的驱动和节点，避免空设备探测；保留升级介质、环境变量和救援路径。验证不仅看秒数，还要回归正常启动、升级、异常介质和恢复。</p><p>一个容易被追问的点是 <code>status = "disabled"</code> 不一定等同于从设备树删除：某些驱动仍会遍历节点或访问资源，必须结合目标驱动行为决定。</p>`,
+        followups: [{ q: "如何证明优化没有误删功能？", a: "建立基线日志和功能清单，逐项比较启动阶段、设备枚举、升级和异常启动；将最终 dtb、配置和时间结果归档。" }],
+        evidence: "海康实习简历：U-Boot 快启、DTS 裁剪",
+        boundary: "简历没有给出实际秒数时，不要临场编造前后时间。",
+        caution: "关闭网络/USB等选项可能影响环境变量、救援和升级，必须说明依赖。"
+      },
+      {
+        id: "intern-haikang-tests", priority: "should", difficulty: "advanced", tags: ["海康", "测试", "700+"],
+        q: "700+ Linux 软件接口测试用例怎样设计，才不是堆数量？",
+        brief: "按接口契约建立正常、边界、异常和资源生命周期矩阵，桩住硬件/系统依赖，记录可复现的输入、预期、副作用和回归关系。",
+        a: `<p>先按模块和接口分类，再为每个接口列出：最小/最大/空指针/非法枚举/超时/重复调用/并发或资源不足。对于 DMA、网络、文件、设备节点等外部依赖，用可控 stub/fake 注入返回值；每个用例写清预期返回、状态变化、释放动作和日志。用例失败后保留环境、输入、版本和报告，修复后做定向+相关回归。</p><p>用例数是规模，覆盖需求和错误路径才是质量。</p>`,
+        followups: [{ q: "如何处理不可测的硬件接口？", a: "把硬件访问隔离在适配层，主机侧测逻辑和错误路径；再用少量板端集成测试验证真实寄存器、时序和中断。" }],
+        evidence: "海康实习简历：700+ 接口单元/集成测试，协助定位 20+ 问题",
+        boundary: "20+ 问题的具体类型要准备真实案例，不能照模板填。",
+        caution: "不要说单元测试覆盖了硬件全部行为。"
+      },
+      {
+        id: "intern-jingwei-can-lin", priority: "must", difficulty: "base", tags: ["经纬恒润", "CAN", "LIN", "量产"],
+        q: "在 BCM 量产测试中，如何定位一个 CAN/LIN 报文问题？",
+        brief: "先确认台架和软件版本，再用原始报文/周期/信号值对照需求；分清总线、网络管理、诊断和应用状态机。",
+        a: `<ol><li>记录硬件、软件版本、配置、复现步骤和发生概率。</li><li>用 CAN/LIN 分析工具抓原始帧，检查 ID、DLC、周期、计数器、校验、信号缩放和发送方向。</li><li>对照应用状态机：点火/钥匙/胎压模式是否满足，是否被诊断会话、网络管理或故障降级抑制。</li><li>必要时用示波器确认物理波形、终端、收发器和唤醒；在代码里加有限速率的关键状态日志。</li><li>修复后用原用例、邻近功能和出货回归关闭缺陷。</li></ol>`,
+        followups: [{ q: "CAN ID 不同但为什么会‘冲突’？", a: "不同 ID 不会语义冲突，但会竞争总线带宽和发送时序；高优先级帧可能延迟低优先级帧，导致诊断响应窗口被打乱。" }],
+        evidence: "经纬恒润实习简历：VBA 分析 CAN/LIN、量产测试",
+        boundary: "没有真实客户报文时不要给出具体 ID 和信号名。",
+        caution: "先证实是总线问题还是应用状态问题。"
+      },
+      {
+        id: "intern-jingwei-uds", priority: "must", difficulty: "base", tags: ["经纬恒润", "UDS", "Bootloader"],
+        q: "描述 UDS on CAN 的 Bootloader 刷写流程，并说清你负责的边界。",
+        brief: "0x10 会话→0x3E 保活→0x27 解锁→0x34 请求下载→0x36 分块传输→0x37 结束→校验→0x11 复位；我的经历主要是上位机 VBA/联调，不把 ECU Bootloader 全部说成自研。",
+        a: `<ol><li><code>0x10 0x03</code> 进入扩展会话，按 P2/P2* 处理响应；<code>0x3E</code> 维持会话。</li><li><code>0x27</code> 获取 Seed，根据约定算法计算 Key，ECU 正响应后才允许刷写。</li><li><code>0x34</code> 发送地址和长度，<code>0x36</code> 按 block sequence 分块，处理响应、超时和重试。</li><li><code>0x37</code> 结束传输，ECU 做长度/CRC/签名等完整性校验。</li><li><code>0x11</code> 复位进入新应用，最后验证软件版本和关键功能。</li></ol>`,
+        followups: [{ q: "TransferData 超时怎么办？", a: "先区分总线无响应、ECU 正在擦写还是上位机超时过短；按协议允许的 P2* 等待，限制重试次数，失败时回到安全状态而不是盲目继续。" }, { q: "UDS 和 CAN 是什么关系？", a: "CAN 是链路层/数据链路承载，UDS 是诊断应用层；多帧刷写通常还要依赖 ISO-TP。" }],
+        evidence: "经纬恒润实习简历；通用 UDS 题库 uds 分类",
+        boundary: "Seed-Key 算法和安全签名细节按真实项目保密边界回答。",
+        caution: "不要把 VBA 工具写成完整 Bootloader 实现。"
+      },
+      {
+        id: "intern-jingwei-polyspace", priority: "should", difficulty: "advanced", tags: ["经纬恒润", "Polyspace", "MISRA"],
+        q: "Polyspace 发现问题后，你如何判断和修复？",
+        brief: "先理解告警对应的路径和规则，再确认是真缺陷、误报还是需求允许的例外；修复后做局部测试、静态分析和回归，不是机械压告警。",
+        a: `<p>重点关注数组越界、空指针、未初始化、符号转换、整数溢出、死代码和资源泄漏。处理流程是：保留告警上下文→追踪数据范围和调用链→用边界检查/类型修正/统一 cleanup 修复→增加覆盖该路径的用例→重新分析并记录结论。对于确实是误报的告警，写出可审计的证明或局部抑制原因，而不是全局关闭规则。</p>`,
+        followups: [{ q: "静态分析和单元测试有什么互补关系？", a: "静态分析探索不依赖实际输入的潜在路径和编码规则；单元测试验证具体输入下的行为。两者都不能替代代码审查和系统测试。" }],
+        evidence: "简历：Polyspace 发现并修复 10+ 处潜在问题",
+        boundary: "不要复述没有亲自确认的告警类型和数量。",
+        caution: "把‘告警关闭’与‘缺陷关闭’区分开。"
+      },
+      {
+        id: "intern-boundary", priority: "must", difficulty: "trap", tags: ["个人贡献", "边界", "追问"],
+        q: "你在团队实习里到底是主导、参与还是协助？",
+        brief: "用动词和交付物分层：主导流程建设，负责某模块实现，参与联调，协助定位；每句话都能指向提交、脚本、报告或缺陷记录。",
+        a: `<p>回答时把“我”限定在个人动作：我分析了什么、改了哪类代码、写了什么测试、用什么证据确认、问题最后由谁合入。比如 TESSY 可以说“我主导了 GUI 流程自动化和结果归档，和同事共同维护用例”；BSP 可以说“我参与 UART/SPI/DMA 适配和日志定位，具体改动以评审记录为准”。这不是弱化经历，而是让贡献可信。</p>`,
+        followups: [{ q: "同事的代码你能讲到什么深度？", a: "能讲接口契约、调用链、测试和自己改动的原因；实现细节不确定就明确说需要查代码，不能把阅读过说成编写过。" }],
+        evidence: "三段实习经历",
+        boundary: "这是所有实习题的回答原则。",
+        caution: "面试官往往会沿着‘你为什么这么改’追问个人判断。"
+      },
+      {
+        id: "intern-debug-customer", priority: "must", difficulty: "base", tags: ["调试", "客户现场", "高频"],
+        q: "客户现场偶发问题无法稳定复现，你会怎么做？",
+        brief: "先把偶发变成可观测：锁版本/配置、保留现场、增加低扰动计数和时间戳，再用最小变量实验和统计而不是凭感觉改代码。",
+        a: `<ol><li>收集设备、版本、配置、发生时间、负载、温度、电源和复现概率。</li><li>判断是功能错、性能超时、资源泄漏、数据竞争还是硬件/链路异常。</li><li>增加有限速率日志、计数器、状态快照、故障码或 GPIO 打点，避免调试代码改变时序。</li><li>用二分法关闭模块/降低负载/替换线缆或对端，逐步缩小变量；必要时保留 core、栈回溯和原始报文。</li><li>提出临时规避和永久修复，分别做现场验证、回归和版本记录。</li></ol>`,
+        followups: [{ q: "为什么不能一上来加大量 printf？", a: "printf 可能阻塞、改变任务时序和总线负载，甚至掩盖竞态；应使用环形日志、非阻塞输出和低频采样。" }],
+        evidence: "三段实习的联调/缺陷闭环；CAN 项目观测设计",
+        boundary: "没有真实现场案例时，用方法回答，不虚构客户名称和故障数字。",
+        caution: "故障复现率和日志开销都要记录。"
+      },
+      {
+        id: "intern-learning-loop", priority: "should", difficulty: "base", tags: ["学习", "复盘", "工程化"],
+        q: "面对一个完全陌生的 SoC 或外设，你的学习和落地流程是什么？",
+        brief: "先找硬件事实和官方 binding，再做最小 bring-up，建立观测命令与回归用例，最后抽象接口并写下限制。",
+        a: `<ol><li>收集原理图、芯片手册、SDK 示例、设备树 binding 和当前启动日志。</li><li>画出资源路径：时钟/复位→pinmux→中断/DMA→驱动→设备节点/Socket/业务。</li><li>只实现最小读写或 loopback，先证明硬件和驱动链路。</li><li>逐步增加并发、错误和性能测试，记录可复现命令与结果。</li><li>稳定后再抽象公共接口，避免在问题还没收敛时过度架构。</li></ol>`,
+        followups: [{ q: "文档和代码冲突时信谁？", a: "以实际板卡、芯片手册版本、运行时 dtb/寄存器和波形为证据；把冲突记录下来并确认版本，不直接挑对自己有利的说法。" }],
+        evidence: "海康 BSP 经历；两个项目的开发文档",
+        boundary: "不要把‘看过文档’说成‘掌握 SoC 全部架构’。",
+        caution: "学习流程的终点是可回归证据。"
+      }
+    ]
+  },
+  {
+    id: "watch-project", name: "智能健康穿戴", icon: "watch", track: "resume",
+    desc: "以 GD32F405 + RT-Thread + LVGL 的简历口径准备；现有 watch1 工程的直接证据是 STM32F411，型号口径必须在面试前统一。",
+    questions: [
+      {
+        id: "watch-intro", priority: "must", difficulty: "base", tags: ["穿戴", "项目介绍", "30秒"],
+        q: "用 30 秒介绍智能健康穿戴项目。",
+        brief: "这是一个以 MCU/RTOS 为核心的可穿戴闭环：采集健康和环境数据，经过服务层处理后显示/蓝牙同步，并通过 OTA、低功耗和故障处理保证可用性。",
+        a: `<p>“项目基于简历口径的 GD32F405 + RT-Thread + LVGL。我按驱动/HAL、设备注册、服务、应用线程和 UI 分层，把 MAX30102、MPU6050、环境传感器、电池 ADC、显示、触摸和 BLE 组合起来。传感器数据由线程采集，通过消息队列送到算法和 UI；OTA 用 YMODEM/CRC 和双区标志管理，电源用 NORMAL/IDLE/SLEEP/CHARGING 状态机控制。我的重点不是把功能堆在 main 里，而是让硬件替换、任务通信和故障恢复有清晰边界。”</p>`,
+        followups: [{ q: "你负责最难的哪一块？", a: "优先选能展示系统思维的一块：PPG 采集到显示的实时链路，或 OTA/低功耗的状态切换。回答时给一个具体故障和验证。" }],
+        evidence: "watch1/app、services、Drivers、hal、osal",
+        boundary: "型号和指标按简历口径说，但被追问时遵守证据边界题。",
+        caution: "不要把现成 LVGL 控件说成自研 GUI 框架。"
+      },
+      {
+        id: "watch-layers", priority: "must", difficulty: "base", tags: ["五层架构", "RT-Thread", "高频"],
+        q: "穿戴项目的五层架构怎么划分？为什么这样分？",
+        brief: "Board/HAL 隔离芯片，Driver 负责器件，Service 负责可复用能力，App 负责业务线程，UI 只表达状态；依赖方向向下，数据通过明确接口向上。",
+        a: `<ol><li><strong>Board/HAL：</strong>引脚、时钟、SPI/I2C/UART/ADC/RTC/DMA 等芯片相关操作。</li><li><strong>Driver：</strong>MAX30102、MPU6050、AHT20、显示、触摸、BLE、存储等器件协议和能力。</li><li><strong>Service：</strong>心率/血氧、传感器融合、数据存储、OTA、电源、时间等业务无关服务。</li><li><strong>App：</strong>线程、消息队列、任务调度和产品状态编排。</li><li><strong>UI：</strong>页面栈、LVGL 对象和用户交互，不直接读寄存器。</li></ol><p>分层不是越多越好，边界的判断标准是：能否独立测试、替换、复用，是否拥有清晰的数据和错误契约。</p>`,
+        followups: [{ q: "为什么 UI 不能直接调用传感器驱动？", a: "会把采样时序、阻塞 I/O 和设备依赖带进渲染线程，难以测试和保证帧率；UI 读取服务层的快照即可。" }, { q: "分层会不会增加开销？", a: "函数调用和少量消息开销通常可接受；真正需要优化的是复制次数、阻塞 I/O 和刷新带宽，不能为了抽象牺牲实时性。" }],
+        evidence: "watch1/hal、Drivers、services、app",
+        boundary: "以代码现状为准，不声称所有模块都完全遵守理想分层。",
+        caution: "说出一个真实文件或接口比背五层名字更有说服力。"
+      },
+      {
+        id: "watch-ops-registry", priority: "must", difficulty: "advanced", tags: ["函数指针", "设备注册", "依赖倒置"],
+        q: "ops 结构体和设备注册表如何实现依赖倒置？",
+        brief: "上层依赖能力接口和注册后的 ops 指针，不依赖具体芯片；驱动在初始化时填充函数表，替换器件只替换实现和 board 配置。",
+        a: `<p>以心率传感器为例，上层只调用 <code>read_raw/read_fifo/power_on/power_off</code> 等能力；具体 MAX30102 驱动把这些函数填入 <code>hr_sensor_ops_t</code>，初始化时注册到服务层。服务层不包含器件寄存器地址，也不关心底层是硬件 I2C 还是其他实现。</p><p>注意函数指针不是“自动多态”：要校验 ops 非空、接口版本、对象生命周期和并发访问；错误码和单位必须稳定，否则替换实现会产生隐蔽问题。</p>`,
+        followups: [{ q: "函数指针调用可能有什么问题？", a: "空指针、签名不匹配、对象已释放、并发替换和回调上下文错误；用 const ops、初始化断言、统一错误码和明确所有权降低风险。" }],
+        evidence: "watch1/services/health、watch1/Drivers/dev_registry.c、各 ops 头文件",
+        boundary: "不要把设备注册表说成完整的动态插件系统。",
+        caution: "最好准备一个‘替换真实驱动为 fake 进行单测’的例子。"
+      },
+      {
+        id: "watch-threads", priority: "must", difficulty: "advanced", tags: ["RT-Thread", "线程", "实时性"],
+        q: "穿戴项目的线程如何分工？优先级和周期怎么定？",
+        brief: "按实时性和阻塞风险拆：UI/输入、采样与算法、BLE、存储/OTA、电源；高频短任务优先，慢 I/O 通过消息队列异步化。",
+        a: `<p>面试时不要死背一组未经验证的优先级数字，而要解释决策：采样和显示有固定周期，BLE/存储可能阻塞，电源管理可低优先级；线程尽量短、明确睡眠，禁止在高优先级任务里做长 I/O。线程之间用消息队列传递值，用邮箱传递小命令/唤醒事件，必要时用 mutex 保护共享状态。</p><p>验证方法包括统计线程运行时间、队列高水位、栈水位、掉帧计数和传感器 FIFO 溢出，而不是凭感觉调优。</p>`,
+        followups: [{ q: "高优先级任务把低优先级饿死怎么办？", a: "检查是否无阻塞循环、优先级是否过高、时间片/睡眠是否合理；拆分工作、限时处理、用队列背压或降低优先级，配合运行时间和调度 trace 验证。" }, { q: "为什么不让所有任务都同优先级？", a: "同优先级可轮转但无法表达硬实时截止期；优先级应体现响应要求，同时避免过多高优先级造成抖动。" }],
+        evidence: "watch1/app/threads、watch1/osal、RT-Thread 内核",
+        boundary: "简历写的线程数量和周期要以最终版本代码/文档核对后再背。",
+        caution: "优先级数字不是性能指标。"
+      },
+      {
+        id: "watch-ipc", priority: "must", difficulty: "base", tags: ["消息队列", "邮箱", "IPC"],
+        q: "为什么传感器数据用消息队列，唤醒事件更适合邮箱？",
+        brief: "消息队列拷贝固定大小结构，接收方拥有数据副本；邮箱传递一个小值/指针，适合唤醒原因或命令，但指针生命周期必须受控。",
+        a: `<p>传感器数据通常包含时间戳、心率、血氧、姿态等多个字段，用消息队列按固定结构拷贝，发送方可立即复用缓冲区。唤醒事件只有“按键/抬腕/充电/RTC”这类小命令，用邮箱传递枚举值更轻量。</p><p>如果邮箱传指针，必须明确谁分配、谁消费、何时释放；否则会出现悬空指针或内存泄漏。ISR 只能调用 RTOS 的 ISR-safe API，不能直接阻塞等待。</p>`,
+        followups: [{ q: "消息队列满了怎么办？", a: "按数据重要性选择覆盖旧值、丢弃并计数、阻塞有限时间或触发降级；不能静默丢失关键报警。记录队列高水位。" }],
+        evidence: "watch1/osal/osal_queue.c、osal_mailbox.c；app 线程通信",
+        boundary: "项目实际采用的 API 名称以当前 RT-Thread 适配层为准。",
+        caution: "volatile 不能替代队列或锁。"
+      },
+      {
+        id: "watch-ppg-chain", priority: "must", difficulty: "advanced", tags: ["MAX30102", "PPG", "算法", "高频"],
+        q: "从手指放上传感器到显示心率和血氧，完整链路是什么？",
+        brief: "MAX30102 FIFO→I2C 读取与时间戳→IIR 去基线→AC/DC 与峰值→HR/SpO2 有效性判断→服务快照→消息队列→UI 刷新。",
+        a: `<ol><li>MAX30102 以红光/红外采样并写入 FIFO，FIFO 接近阈值时通过中断提示读取。</li><li>驱动通过 I2C 连续读取 6 字节一组的 RED/IR 原始值，带上采样时间并处理 FIFO 溢出。</li><li>算法做基线跟踪，得到 AC；在窗口内检测峰间距得到心率，用红光/红外的 AC/DC 比值估算血氧。</li><li>对峰间距、信号幅度、手指接触和结果范围做有效性判断，异常时保持无效而不是显示旧值冒充新值。</li><li>服务层发布数据快照，App/UI 线程消费并刷新控件，避免 UI 线程直接阻塞 I2C。</li></ol>`,
+        followups: [{ q: "为什么 MAX30102 读 FIFO 不能只读一个寄存器？", a: "每个样本包含 RED/IR 的多字节数据，且 FIFO 有读写指针和溢出状态；需要按样本宽度连续读取并处理指针关系。" }, { q: "结果突然归零先查哪里？", a: "先看原始 RED/IR 是否变化、FIFO/中断计数、I2C ACK 和电源，再看算法有效性门限和时间戳，最后才改滤波参数。" }],
+        evidence: "watch1/Drivers/sensors/drv_hr_max30102.c；services/health/svc_spo2_algo.c",
+        boundary: "当前代码是轻量算法，不要描述成医疗级算法。",
+        caution: "健康数据必须说明是工程展示/趋势参考，不是医疗诊断。"
+      },
+      {
+        id: "watch-ppg-iir", priority: "must", difficulty: "advanced", tags: ["IIR", "参数", "算法深挖"],
+        q: "IIR 基线跟踪的 α 为什么这样选？窗口和峰值门限怎么验证？",
+        brief: "α 决定跟踪速度与噪声抑制的折中，不能只背 0.01；参数应通过静止、不同心率、手指接触变化和运动数据对照。",
+        a: `<p>一阶 IIR 基线可写成 <code>baseline += α * (raw - baseline)</code>。α 越小，基线变化慢、对脉搏 AC 影响小，但对手指重新接触的适应慢；α 越大，跟踪快但可能把有效脉搏一起滤掉。窗口长度和最小峰间距同样影响延迟、误检和可测心率范围。</p><p>验证时保存原始数据和算法中间量，逐个参数做静止、不同光照/接触、快慢心率和人为干扰测试，比较误检率、漏检率、响应延迟和结果稳定性。不要只用一次手指读数宣称参数最优。</p>`,
+        followups: [{ q: "如何避免把噪声当峰？", a: "结合幅度阈值、峰间最小距离、局部极值和连续样本确认；阈值要随基线/信号质量调整，异常时输出 invalid。" }],
+        evidence: "watch1/services/health/svc_spo2_algo.c 中 IIR、峰值和 MIN_PEAK_MS",
+        boundary: "代码里有算法实现，但仓库没有完整参数对照报告；指标需补测。",
+        caution: "回答‘为什么 α=0.01’时应说设计折中和验证计划，而不是声称数学上唯一正确。"
+      },
+      {
+        id: "watch-spo2-ratio", priority: "should", difficulty: "advanced", tags: ["血氧", "AC/DC", "深挖"],
+        q: "心率和血氧为什么使用不同的信号特征？",
+        brief: "心率主要来自脉搏周期，血氧需要红光/红外的 AC/DC 比值；两者都依赖信号质量和标定，不能把公式当成医疗准确度。",
+        a: `<p>心率可以通过同一通道脉搏波的峰间时间得到周期。血氧估算利用氧合血红蛋白和还原血红蛋白对红光/红外吸收差异，通常先求每个通道的 AC/DC，再构造 <code>R=(AC_red/DC_red)/(AC_ir/DC_ir)</code>，通过经验标定曲线得到 SpO2。AC 代表随心搏变化的成分，DC 包含组织、环境光和平均灌注等基线。</p><p>工程上必须叠加接触质量、饱和、环境光和运动干扰判断；没有标定数据时只能称为估算。</p>`,
+        followups: [{ q: "为什么血氧结果不能只看一个瞬时样本？", a: "瞬时样本受噪声、接触、LED 电流和环境光影响大，需要窗口统计、质量门限和稳定性判断。" }],
+        evidence: "watch1/services/health/svc_spo2_algo.c",
+        boundary: "不声称通过了医疗器械标准或临床验证。",
+        caution: "简历中的 ±3 bpm 只对应心率测试条件，不等同于 SpO2 精度。"
+      },
+      {
+        id: "watch-hr-metric", priority: "must", difficulty: "trap", tags: ["±3 bpm", "验证", "证据边界"],
+        q: "简历写心率误差控制在 ±3 bpm，你怎么证明？",
+        brief: "必须给参考设备、样本量、状态、误差定义、原始记录和排除规则；当前仓库没有完整报告时，明确说这是简历指标，面试前补齐证据。",
+        a: `<p>严谨验证至少要说明：参考设备/人工脉搏基准、静止还是运动、每个受试者和心率区间、同步方式、稳定窗口、平均绝对误差/最大误差/异常率，以及哪些样本被判 invalid。工程做法是同时记录原始 PPG、算法输出和参考值，按窗口计算误差，而不是挑一个显示画面。</p><p>如果目前只有实机演示和少量手动对照，应回答：“当前版本在静止、接触稳定的样本上达到简历所写的 ±3 bpm；我还没有把不同人群、运动和环境的统计报告整理成医疗级结论，下一步会补充样本与置信区间。”</p>`,
+        followups: [{ q: "运动时怎么办？", a: "当前版本可先用 MPU6050 活动量做质量门控，运动时标记不可靠；进一步可做加速度参考的自适应滤波，但不能把计划说成已实现。" }],
+        evidence: "简历指标；代码有算法链但无完整误差报告",
+        boundary: "这是高风险数字，必须补测试数据或降低表述。",
+        caution: "不要用‘肉眼看起来稳定’证明精度。"
+      },
+      {
+        id: "watch-ota-flow", priority: "must", difficulty: "advanced", tags: ["OTA", "YMODEM", "CRC", "高频"],
+        q: "穿戴项目的 OTA 从接收数据到写入 Flash 怎么走？",
+        brief: "BLE/UART 字节流→YMODEM 状态机→包序号/CRC16→擦除目标区→按字写 Flash→完成后写 EEPROM 状态和目标区→重启由 Bootloader 选择。",
+        a: `<ol><li>BLE 线程把接收字节喂给 OTA 状态机，等待 SOH/STX，按包长接收序号、反序号、数据和 CRC16。</li><li>序号和 CRC 正确才 ACK；错误 NAK 触发重发，超时回到等待状态，限制数据长度不超过目标区。</li><li>收到首包后擦除目标应用区，后续按 Flash 编程粒度写入，记录地址、大小和进度。</li><li>收到 EOT 后做最终长度/校验，写 EEPROM 的 target/status/default bank 等标志，重启进入 Bootloader。</li></ol><p>Flash 写入期间要处理中断、看门狗、掉电和非法镜像，不能只讲通信协议。</p>`,
+        followups: [{ q: "为什么先写 B 区？", a: "保留当前可启动镜像，传输失败不会破坏正在运行的 A 区；切换必须在完整性验证后进行。" }, { q: "YMODEM 的 CRC16 和应用镜像 CRC 有什么区别？", a: "YMODEM CRC16 保护传输包，镜像级校验保护整个固件；层次不同，不能只依赖某一层。" }],
+        evidence: "watch1/services/ota/svc_ota.c；watch1/Ymodem/",
+        boundary: "现有仓库能证明接收状态机和双区标志，但不能自动证明完整 Bootloader 回滚链。",
+        caution: "不要把 CRC16 说成防篡改；安全启动需要签名/密钥。"
+      },
+      {
+        id: "watch-ota-rollback", priority: "must", difficulty: "trap", tags: ["OTA", "回滚", "风险"],
+        q: "简历写了异常掉电恢复和回滚，现有代码如何证实？",
+        brief: "代码有 A/B 地址、EEPROM 标志和看门狗计数设计，但当前工程的 finalize 路径直接把 B 写成稳定区，未看到独立 Bootloader 的完整健康确认/回滚闭环；面试前必须补证据或收窄说法。",
+        a: `<p>可以讲清设计目标：下载永远写非活动区，状态写入要有 magic/版本/长度/CRC，Bootloader 启动时校验镜像，试运行期间递增 boot_count，健康检查通过才 commit，失败则回到旧区。</p><p>但对当前仓库要诚实：<code>svc_ota.c</code> 里能看到 A/B 地址、EEPROM 标志位和 Bootloader 跳转辅助代码，<code>ota_finalize()</code> 会写目标区和默认 bank；没有从现有文件证明“独立 Bootloader 在健康检查失败后自动回滚”的完整路径。回答可以说“我实现了双区下载和状态机框架，回滚闭环还需要以最终 Bootloader 工程和掉电测试为准”。</p>`,
+        followups: [{ q: "如何设计真正可靠的回滚？", a: "镜像元数据双备份/CRC，写入非活动区，启动前验证签名和范围，试运行 watchdog/健康标志，N 次失败回退旧区，提交动作幂等并做掉电注入测试。" }],
+        evidence: "watch1/services/ota/svc_ota.c: BOARD_OTA_APP_A/B、EE_*、ota_finalize；Ymodem/menu.c",
+        boundary: "这是必须在面试前补齐或改简历的红线。",
+        caution: "不能只因为有 A/B 地址宏就宣称完成安全回滚。"
+      },
+      {
+        id: "watch-page-stack", priority: "must", difficulty: "advanced", tags: ["LVGL", "页面栈", "内存"],
+        q: "页面栈如何降低页面常驻和内存占用？",
+        brief: "用固定深度栈保存当前页面及生命周期回调，push/pop 时初始化/销毁页面，避免所有页面同时常驻；当前代码给出 PAGE_STACK_DEPTH=6，不要把‘15 降 2’当成未经测量的代码事实。",
+        a: `<p>页面管理器维护 <code>page_t page_stack[]</code> 和栈顶索引。push 前对当前页调用 deinit，压入新页并用 LVGL 加载动画，再执行目标页 init；pop 时销毁当前页、恢复上一页并执行 init。这样页面导航有统一生命周期和返回语义。</p><p>真正的内存收益要用 LVGL heap/对象计数、SRAM 水位和页面切换前后快照测量。“从 15 个常驻降到 2 个”可以作为简历口径，但面试时应给出页面清单、对象释放策略和测量方式。</p>`,
+        followups: [{ q: "为什么不能每次都创建新页面？", a: "会导致对象泄漏、碎片和切换抖动；要么复用对象，要么在 on_deinit 中明确删除并验证堆水位。" }],
+        evidence: "watch1/app/pages/page_manager.c/h；简历 LVGL 描述",
+        boundary: "当前代码有页面栈，完整 15→2 的对照数据需要单独证实。",
+        caution: "LVGL 双缓冲和页面栈是两个优化点，不要混为同一个指标。"
+      },
+      {
+        id: "watch-spi-dma", priority: "must", difficulty: "advanced", tags: ["SPI", "DMA", "LVGL", "性能"],
+        q: "SPI DMA 刷屏为什么能提升帧率？怎么验证 40%？",
+        brief: "DMA 把连续像素搬运交给外设，CPU 可并行处理 UI/任务；验证要对比同分辨率、同 SPI 频率、同 LVGL 场景下的帧完成时间和 CPU 占用。",
+        a: `<p>同步 SPI 刷屏时 CPU 持续轮询发送寄存器，DMA 方案由 CPU 配置源地址、长度和方向后让 DMA 搬运，完成中断只做短回调。期间 CPU 可以处理输入、传感器或调度，减少阻塞；但 DMA 缓冲区不能在传输中修改，片选/DC 时序和完成回调要正确。</p><p>测量应记录同一页面、同一像素格式和刷新区域的平均/尾部帧时间、FPS、CPU 占用和 DMA 错误。没有前后基线时不要把“感觉更流畅”写成 40%。</p>`,
+        followups: [{ q: "DMA 完成中断里能直接刷新 LVGL 吗？", a: "通常只置完成标志或唤醒显示线程；LVGL 对象操作放在线程上下文，并遵循 LVGL 的线程安全约束。" }],
+        evidence: "watch1/hal/hal_spi_stm32.c；Drivers/display/drv_display_st7789.c",
+        boundary: "代码能证明 SPI1 TX DMA 配置，40% 是简历指标，需补基线。",
+        caution: "DMA 不会自动降低总线传输时间，只降低 CPU 搬运占用。"
+      },
+      {
+        id: "watch-adc-double-buffer", priority: "should", difficulty: "advanced", tags: ["ADC", "DMA", "乒乓缓冲"],
+        q: "电池 ADC 的 DMA 乒乓缓冲怎么工作？为什么比单缓冲好？",
+        brief: "双倍数组分成前后两半，DMA 采集一半时 CPU 处理另一半；半传输/全传输回调只通知，处理线程计算平均值和电压。",
+        a: `<p>配置 <code>BOARD_BAT_ADC_DOUBLE_BUF = 2 * 32</code> 后，DMA 连续写入 64 个采样。半传输事件表示前 32 个稳定，CPU 可处理前半；全传输事件表示后 32 个稳定，CPU 处理后半，DMA 回到开头。这样采样和计算重叠，减少等待，也避免 CPU 读取正在被 DMA 改写的同一段。</p><p>要注意回调上下文、缓存一致性（若平台有 D-cache）、处理速度不能长期赶不上采样，否则会覆盖未处理数据；需统计丢半缓冲次数。</p>`,
+        followups: [{ q: "单缓冲什么时候也够用？", a: "采样间隔大、处理很快且允许短暂停止 DMA 时单缓冲更简单；双缓冲用内存换连续性和吞吐。" }],
+        evidence: "watch1/board/board_watch1.h 的 ADC_BUF_SIZE/DOUBLE_BUF；hal_adc_stm32.c",
+        boundary: "先确认当前代码是否接入了半传输回调，再描述完整行为。",
+        caution: "不要把 DMA 双缓冲等同于硬件 ADC 双 ADC 模式。"
+      },
+      {
+        id: "watch-uart-idle", priority: "should", difficulty: "advanced", tags: ["UART", "DMA", "IDLE", "BLE"],
+        q: "BLE 的 UART DMA + IDLE 接收为什么在 ISR 里只置标志？",
+        brief: "DMA 连续收字节，UART IDLE 表示一段帧间空闲；ISR 读取长度并置 pending，线程再解析、重启 DMA，避免在中断里做阻塞和复杂协议处理。",
+        a: `<p>当前驱动使用固定 RX 缓冲，DMA 写入数据；IDLE IRQ 清标志并根据 DMA 剩余计数计算收到长度，把 <code>rx_pending/rx_data_len</code> 写入共享状态。BLE 线程发现 pending 后消费数据、调用回调、确认长度，再由线程上下文重启 DMA。</p><p>这种设计的关键是 ISR 与线程之间的所有权：ISR 不重启 DMA、不拿 mutex、不解析变长协议；线程消费前不能让 DMA 覆盖同一缓冲区。若帧可能连续无空闲或长度超过缓冲区，要增加环形 DMA/半传输处理。</p>`,
+        followups: [{ q: "pending 标志需要 volatile 吗？", a: "ISR 与线程共享的状态需要防止编译器缓存，但 volatile 不保证多字段一致性；长度/标志更新顺序和临界区仍要设计。" }],
+        evidence: "watch1/Drivers/ble/drv_ble_kt6368.c；hal/hal_uart_stm32.c",
+        boundary: "当前实现是固定 256 字节缓冲，不能说成任意长度协议栈。",
+        caution: "DMA 重启时要先处理旧数据并清状态。"
+      },
+      {
+        id: "watch-power-state", priority: "must", difficulty: "advanced", tags: ["低功耗", "状态机", "STOP"],
+        q: "四级电源状态机如何切换？如何避免唤醒后状态错乱？",
+        brief: "NORMAL/IDLE/SLEEP/CHARGING 由事件驱动，状态切换统一做退出动作、更新 previous/current、再做进入动作；唤醒源只发事件，不能在 ISR 里完成全部恢复。",
+        a: `<p>正常无操作一段时间进入 IDLE（降低亮度/息屏），继续空闲进入 SLEEP（关闭不必要外设并进入 STOP），按键/抬腕/充电/RTC 等事件唤醒回 NORMAL；充电时进入 CHARGING，停止或降低部分采集并显示充电状态。状态机需要拒绝非法重复切换，记录 previous_state，进入/退出动作幂等。</p><p>STOP 唤醒后要重新配置系统时钟、恢复 GPIO/外设、清中断并重新启动需要的 DMA/线程；否则“能唤醒但显示/串口失效”是典型问题。</p>`,
+        followups: [{ q: "充电时和睡眠冲突怎么办？", a: "把充电作为更高优先级事件或独立条件，状态转移表明确 CHARGING 的唤醒和退出规则，不在多个线程各自改 current_state。" }],
+        evidence: "watch1/services/power/svc_power_mgr.c；app/threads 中 stop_enter_thread",
+        boundary: "实际硬件 STOP 功耗和唤醒恢复要以板端测量为准。",
+        caution: "‘四级’包括 CHARGING，不要只讲三态。"
+      },
+      {
+        id: "watch-power-metric", priority: "must", difficulty: "trap", tags: ["功耗", "<1mA", "测量"],
+        q: "休眠功耗低于 1 mA 是怎么测的？",
+        brief: "说明电源入口、仪器量程、采样窗口、外设和电池状态；没有完整记录就说‘目标/当前样机测得’，不要把典型值当保证值。",
+        a: `<p>正确测量要断开调试器和 USB 供电，从电池/电源管理芯片的实际入口串入电流表或功耗分析仪；等待 STOP 稳定，记录峰值和稳态平均值，分别测试屏幕、BLE、传感器、充电和 RTC 唤醒组合。还要确认电源 LED、上拉电阻、稳压器静态电流没有被排除。</p><p>报告至少包含硬件版本、固件版本、状态转移、仪表带宽/采样率和温度。若只有万用表一次读数，应说“粗测低于 1 mA，尚未形成完整功耗报告”。</p>`,
+        followups: [{ q: "为什么唤醒后功耗可能异常？", a: "时钟未恢复正确、外设没有关闭、GPIO 浮空/上下拉、DMA/中断持续触发、BLE 没有进入低功耗或 STOP 后重复初始化。" }],
+        evidence: "简历低功耗指标；watch1/services/power 设计",
+        boundary: "代码只能证明状态机意图，不能替代电流测量。",
+        caution: "不要说‘MCU 睡眠功耗’而漏掉整板静态电流。"
+      },
+      {
+        id: "watch-debug-sensor-zero", priority: "must", difficulty: "base", tags: ["调试", "传感器", "故障排查"],
+        q: "心率传感器数据突然归零，你会怎样排查？",
+        brief: "按供电/总线/采样/算法/显示五层拆开，先抓原始数据和状态寄存器，避免直接调阈值。",
+        a: `<ol><li><strong>供电：</strong>测传感器电源、复位、LED 电流和接触状态。</li><li><strong>总线：</strong>检查 I2C 地址、ACK、NACK/超时和总线是否被拉低；必要时看 SCL/SDA 波形。</li><li><strong>采样：</strong>看 FIFO 写读指针、溢出、中断计数和时间戳是否停止。</li><li><strong>算法：</strong>打印 raw、baseline、AC、峰值间隔和 valid 标志，确认是无数据还是被质量门限判无效。</li><li><strong>任务/UI：</strong>查消息队列是否满、线程是否饿死、UI 是否显示默认值。</li></ol>`,
+        followups: [{ q: "怎么快速区分硬件和算法？", a: "绕过算法把原始 FIFO 计数和数值记录下来；raw 也为零偏向供电/总线，raw 正常但结果无效再看算法和质量门限。" }],
+        evidence: "watch1/drv_hr_max30102.c、svc_spo2_algo.c、app 线程",
+        boundary: "把真实观测结果补进答案，不要只背排查清单。",
+        caution: "不要为了让 UI 有数值而关闭有效性判断。"
+      },
+      {
+        id: "watch-stack-memory", priority: "should", difficulty: "advanced", tags: ["栈", "SRAM", "RTOS"],
+        q: "线程栈大小怎么定？如何判断 SRAM 够不够？",
+        brief: "先估算最深调用链和局部数组，再用栈填充/水位和峰值任务组合实测；堆、LVGL buffer、DMA buffer、队列池和线程栈一起做内存预算。",
+        a: `<p>每个线程先按最深调用链、局部结构体/数组、库函数临时栈和中断嵌套估算，留出余量；启动时用固定模式填充栈，运行覆盖 UI 动画、BLE 突发、传感器和 OTA 等最坏组合，读取 high-water mark。系统级预算要列出静态区、RT-Thread 对象、LVGL draw buffer、DMA 双缓冲、消息队列和堆碎片。</p><p>出现 HardFault 时保存 MSP/PSP、LR、PC 和栈边界，结合 map 文件确认是栈溢出、野指针还是非法地址，不能只把栈调大。</p>`,
+        followups: [{ q: "为什么栈大了仍然会崩？", a: "根因可能是越界写、释放后使用、DMA 覆盖、堆耗尽、ISR 栈或错误的指针；增大栈只能掩盖部分问题。" }],
+        evidence: "watch1/MDK-ARM、RT-Thread 线程配置；通用 HardFault 题",
+        boundary: "没有实际 high-water 数据时说明测试缺口。",
+        caution: "‘SRAM 够用’要给预算或 map 证据。"
+      },
+      {
+        id: "watch-hardfault", priority: "must", difficulty: "advanced", tags: ["HardFault", "栈回溯", "调试"],
+        q: "手表偶发 HardFault，你的定位步骤是什么？",
+        brief: "先保存 fault frame 和复位原因，再用 PC/LR/map/反汇编定位，结合栈水位、看门狗和并发日志复现；不要只在 fault handler 里 printf。",
+        a: `<ol><li>在 HardFault handler 保存 R0-R3、R12、LR、PC、xPSR，以及 CFSR/HFSR/MMFAR/BFAR 和复位原因到保留 RAM/EEPROM。</li><li>根据 PC 对照 ELF/map 和反汇编，确认 fault 指令及访问地址；判断未对齐、权限、总线错误还是执行到非法地址。</li><li>检查最近的 DMA、消息队列、线程栈、数组边界、对象生命周期和中断上下文。</li><li>增加断言、栈水位、队列高水位和低扰动日志，构造高负载/重复唤醒/OTA 中断等组合场景。</li></ol>`,
+        followups: [{ q: "PC 不在业务代码怎么办？", a: "可能是栈被破坏、函数指针/返回地址被覆盖或中断向量错误；检查栈边界、LR、调用链和内存保护，不要只看最后一行源码。" }],
+        evidence: "watch1/Core/Src/stm32f4xx_it.c；CMSIS Cortex-M fault frame；简历栈回溯能力",
+        boundary: "当前仓库是否已经有完整 fault 持久化要实查后回答。",
+        caution: "fault handler 中避免调用复杂库和阻塞 API。"
+      },
+      {
+        id: "watch-test-plan", priority: "should", difficulty: "base", tags: ["测试", "系统集成", "回归"],
+        q: "你会怎样为健康穿戴制定一套可交付的测试计划？",
+        brief: "从驱动单测、服务算法、线程/IPC、系统状态、功耗/性能到异常恢复分层，所有指标绑定输入、仪器、判定条件和日志。",
+        a: `<ul><li>驱动：I2C/SPI/UART/ADC 正常、NACK、超时、FIFO 溢出、DMA 错误。</li><li>算法：已知波形、不同心率、无手指、接触变化和运动干扰；保存原始数据。</li><li>系统：页面切换、BLE 突发、队列满、线程暂停、看门狗、唤醒源组合。</li><li>OTA：包损坏、乱序/丢包、空间不足、掉电窗口、旧版本回退。</li><li>性能/功耗：帧时间、CPU、栈/堆水位、采样丢失和每个电源状态电流。</li></ul><p>每项都要记录版本、硬件、步骤、预期、实际和产物，才能在面试里回答“怎么验证”。</p>`,
+        followups: [{ q: "最先自动化什么？", a: "先自动化协议、算法和状态机的确定性用例，再把板端 smoke/OTA/功耗做成可重复脚本；硬件受限部分保留人工检查表。" }],
+        evidence: "watch1 工程模块；简历测试与质量工具能力",
+        boundary: "不要声称已有 CI/医疗级认证，除非有记录。",
+        caution: "正常演示不是交付测试。"
+      },
+      {
+        id: "watch-resume-risk", priority: "must", difficulty: "trap", tags: ["简历核对", "风险", "收口"],
+        q: "穿戴项目简历中哪些数字或技术点最容易被深挖？",
+        brief: "GD32F405 型号、±3 bpm、15→2 页面、帧率 +40%、功耗 <1 mA、双区回滚、六线程/周期都要准备直接证据。",
+        a: `<p>把每个数字准备成一张“证据卡”：基线、优化动作、测量工具、测试条件、结果范围、局限。没有卡片就把措辞改为“实现了……设计/框架”“在静止样本上观察到……”。</p><p>特别注意：现有工程 <code>watch.ioc</code> 是 STM32F411CEU6，而简历写 GD32F405；OTA 代码能看到 A/B 标志和 YMODEM，但完整 Bootloader 健康检查/回滚需要另一份证据。面试前统一简历、工程、实物和口述，比继续背更多八股更重要。</p>`,
+        followups: [{ q: "被指出代码和简历不一致怎么办？", a: "先承认当前仓库对应的版本，再解释版本/适配分支关系；如果没有证据就说是简历表述不严谨，并给出更准确版本。" }],
+        evidence: "watch1/watch.ioc、board_watch1.h、svc_ota.c；简历项目经历",
+        boundary: "这道题的目的就是阻止过度承诺。",
+        caution: "不要用‘代码只是示例’掩盖没有完成的功能。"
+      }
+    ]
+  },
+  {
+    id: "can-blackbox", name: "CAN 通信黑匣子", icon: "radio-tower", track: "resume",
+    desc: "项目定位：i.MX6ULL Linux 采集器 + S32K144 可控 ECU。回答要始终区分真实 CAN 链路、Linux 用户态和测试边界。",
+    questions: [
+      {
+        id: "can-intro", priority: "must", difficulty: "base", tags: ["CAN黑匣子", "项目介绍", "30秒"],
+        q: "用 30 秒介绍 CAN 黑匣子项目。",
+        brief: "为难复现的 CAN 偶发故障保留故障前后上下文，并在 SD/进程异常后恢复采集；核心是采集路径、检测、快照、持久化和监督恢复。",
+        a: `<p>“我用 i.MX6ULL 做 Linux 采集端，通过 SocketCAN 接收真实 CAN 报文；用 S32K144 模拟 ECU，并通过串口切换心跳丢失、周期抖动、Alive Counter 跳变、CRC 错误和 burst 等故障。采集器用非阻塞 SocketCAN + epoll/timerfd/signalfd，固定容量环形缓冲保留故障前 10 秒，触发后再抓 5 秒，通过异步写线程生成带 CRC 和索引的 .bbx 文件。Supervisor 通过进程心跳、SIGCHLD 和 SD 挂载保护实现分级重启。当前 T01～T08 共 122 项实机自动化测试通过；T09 真实异常掉电因缺少独立电源控制设备仍是条件受限。”</p>`,
+        followups: [{ q: "你真正负责了哪些部分？", a: "Linux 采集、协议校验、检测器、环形缓冲、快照、日志、Supervisor、脚本和实机联调；使用系统已有 FlexCAN 内核驱动，不说成自研内核驱动。" }],
+        evidence: "can-blackbox-worktree/README.md；docs/14_项目面试速成与题库.md",
+        boundary: "‘丢包为 0’限定为测试时 can0 的统计和场景，不能泛化为任何工况。",
+        caution: "先说边界再说结果，T09 未完成要主动知道。"
+      },
+      {
+        id: "can-why-hardware", priority: "must", difficulty: "base", tags: ["CAN", "i.MX6ULL", "S32K144"],
+        q: "为什么同时用 i.MX6ULL 和 S32K144，而不是只用 vcan？",
+        brief: "vcan 适合快速验证用户态逻辑，S32K144 + 收发器 + i.MX6ULL 才能暴露波特率、终端、ACK、收发器供电和总线错误。",
+        a: `<p>vcan 没有真实电气层，适合单测协议、检测器和日志恢复；真实链路能验证 CANH/CANL、参考地、终端电阻、采样点、ACK、bus-off、接口恢复和收发器故障。S32K144 的串口故障模式让测试可以重复，而不是手工制造偶发故障。两层测试结合，效率和真实性都保留。</p>`,
+        followups: [{ q: "vcan 测试能证明什么？", a: "能证明用户态收发、解析、检测、快照和日志逻辑；不能证明真实 CAN 物理层、控制器错误状态和总线负载下时序。" }],
+        evidence: "README；docs/11 第 5.3/5.6/5.8 节",
+        boundary: "不要把 vcan 的通过结果说成实机链路通过。",
+        caution: "物理测试的接线和 bitrate 要说清。"
+      },
+      {
+        id: "can-event-loop", priority: "must", difficulty: "advanced", tags: ["SocketCAN", "epoll", "timerfd", "signalfd"],
+        q: "采集器的 epoll + timerfd + signalfd 事件循环怎么设计？",
+        brief: "把 CAN socket、检测定时器、统计/重连定时器和退出信号统一成 fd 事件；主循环只做有限时延工作，磁盘写入交给线程。",
+        a: `<p>启动时创建非阻塞 CAN RAW socket、过滤器、检测/统计 timerfd、阻塞信号并创建 signalfd，全部注册到 epoll。主循环收到 CAN 可读后循环 <code>read</code> 到 <code>EAGAIN</code>，完成固定记录、轻量协议校验和 detector 更新；收到 timerfd 就做超时检测/统计/重连；收到 signalfd 或 stop 事件就按顺序停止写线程、flush、关闭资源。这样不用异步信号处理函数做复杂逻辑。</p><p>当前项目使用水平触发（只注册 EPOLLIN），但仍 drain 到 EAGAIN 以减少积压。</p>`,
+        followups: [{ q: "为什么 CAN socket 必须非阻塞？", a: "事件通知后可能只有有限帧；阻塞 read 读完最后一帧会卡住定时器、信号和重连处理。EAGAIN 表示本轮读完，不是故障。" }, { q: "EINTR 和 EAGAIN 怎么处理？", a: "EINTR 通常重试或回事件循环；EAGAIN/EWOULDBLOCK 是非阻塞读取的正常结束。" }],
+        evidence: "src/can_source.c、src/main.c、README",
+        boundary: "不要把 LT 说成 ET；代码只注册 EPOLLIN。",
+        caution: "fd 生命周期和 epoll_ctl 删除顺序要能说清。"
+      },
+      {
+        id: "can-filter", priority: "should", difficulty: "base", tags: ["SocketCAN", "过滤", "性能"],
+        q: "SocketCAN 过滤器怎么配置？过滤未知 ID 会有什么影响？",
+        brief: "内核提前过滤 0x100/0x200/0x300 和错误帧，减少用户态处理；如果要诊断未知 ID 或排查现场，必须放宽过滤并保留原始统计。",
+        a: `<p>创建 <code>PF_CAN/SOCK_RAW</code> 后通过 <code>setsockopt(CAN_RAW_FILTER)</code> 安装标准 ID 精确过滤器，并通过错误过滤器接收 CAN 错误帧。过滤掩码可理解为 <code>(received & mask) == (filter & mask)</code>。好处是内核早丢弃不关心帧，降低用户态 wakeup 和检测开销；代价是未知 ID 根本不会到达用户态，无法事后分析。</p>`,
+        followups: [{ q: "CAN_ERR_FLAG 为什么要单独处理？", a: "错误帧的 can_id 高位带标志，语义和业务帧不同；要先识别错误标志，再按错误掩码解析，不能当普通业务 ID 取。" }],
+        evidence: "docs/14 Q6/Q12；src/can_source.c",
+        boundary: "过滤策略是业务范围，不代表总线上没有其他帧。",
+        caution: "现场诊断模式可以使用全量采集，但要评估性能和存储。"
+      },
+      {
+        id: "can-detector", priority: "must", difficulty: "advanced", tags: ["异常检测", "心跳", "周期", "CRC"],
+        q: "黑匣子检测哪些异常？阈值如何避免误报？",
+        brief: "心跳超时、周期异常、Alive Counter 跳变、Payload CRC 错误和突发；用活动状态、连续 streak、阈值容忍和恢复清零抑制重复告警。",
+        a: `<ul><li><strong>心跳超时：</strong>由 timerfd 主动检查距最后 0x200 的时间，当前设计阈值约 300 ms。</li><li><strong>周期异常：</strong>比较相邻时间戳，超出 expected ±30% 连续 3 次才触发。</li><li><strong>Alive Counter：</strong>0x100 按 4 bit 回绕，0x200/0x300 按 8 bit，比较期望递增。</li><li><strong>CRC：</strong>按 CRC-8/SAE-J1850（初值/多项式/最终异或）校验 payload 最后字节，错误帧保留但不更新正常基线。</li><li><strong>突发：</strong>统计短窗口帧数，超过配置阈值触发。</li></ul><p>每类异常有 active 状态，只在正常→异常时建事件，恢复后清零，避免持续故障刷爆日志。</p>`,
+        followups: [{ q: "为什么心跳阈值是 300 ms？", a: "0x200 期望 100 ms，三个周期能容忍一次抖动并快速发现持续停止；最终需要结合负载、调度和安全要求实测。" }, { q: "CRC 错误帧为什么还保存？", a: "错误本身就是现场证据，保存带 INVALID_CRC 状态的原始帧，但不让它污染正常 Alive/周期基线。" }],
+        evidence: "src/detector.c、src/protocol.c；docs/14 Q13-Q20",
+        boundary: "阈值是配置和测试结果，不是所有 CAN 项目的通用常量。",
+        caution: "应用 payload CRC 与 CAN 控制器帧 CRC 是两层保护。"
+      },
+      {
+        id: "can-counter-wrap", priority: "should", difficulty: "advanced", tags: ["Alive Counter", "协议", "边界"],
+        q: "Alive Counter 回绕如何判断合法？",
+        brief: "按信号位宽做 mask 后比较 `(previous + 1) & mask`；0x0F→0x00 是合法回绕，跳 2 或重复才是异常。",
+        a: `<p>先明确每个信号的位宽和所在 payload 字节。4 bit counter 的合法期望是 <code>(previous + 1) & 0x0F</code>，8 bit 则用 <code>0xFF</code>。检测前要处理首次收到没有 previous 的情况、接口重连后的基线重建和异常恢复后的重新布防。不要用无符号整数自然溢出掩盖信号位宽错误。</p>`,
+        followups: [{ q: "接口断开再恢复，第一帧 counter 跳变怎么办？", a: "清空基线或将第一帧标记为重新同步，不把断线期间未知丢帧数量直接算成 counter fault。" }],
+        evidence: "docs/14 Q15；src/protocol.c/detector.c",
+        boundary: "具体 counter 在 CAN payload 的 bit 位置需查协议定义。",
+        caution: "计数器正常不代表 payload 其他信号正确。"
+      },
+      {
+        id: "can-ring-buffer", priority: "must", difficulty: "advanced", tags: ["环形缓冲", "快照", "实时性"],
+        q: "为什么用固定容量环形缓冲保存故障前 10 秒？触发后如何冻结？",
+        brief: "正常阶段 overwrite 保持最近历史；触发后 preserve，复制到独立写槽并抓取故障后窗口，避免 SD I/O 阻塞接收，也避免覆盖已冻结现场。",
+        a: `<p>每条记录固定 32 字节，默认 2048 条，启动时一次分配约 64 KiB。正常滚动时新帧覆盖最旧帧，持续保留最近 10 秒；检测器触发后记录事件时间，冻结前窗口并切换 preserve，后续帧持续到故障后 5 秒。完成后将记录和事件复制到独立写槽入队，原环缓冲恢复滚动。</p><p>如果写槽全满，采集器保持 FROZEN 并显式计数，不能静默覆盖旧故障数据。容量、时间窗口和高峰帧率必须在配置和测试里对应。</p>`,
+        followups: [{ q: "为什么不能触发后直接把环缓冲交给写线程？", a: "写线程消费期间采集器若继续写会产生所有权竞争；独立写槽把快照生命周期和滚动采集解耦。" }, { q: "快照前窗口一定是 10 秒吗？", a: "由容量和实际帧率共同决定，配置目标是 10 秒；高突发时可能按记录数或窗口策略触发容量保护。" }],
+        evidence: "src/ring_buffer.c、src/recorder.c；docs/08/11",
+        boundary: "10 秒和 5 秒是项目配置目标，不是任意负载下的绝对保证。",
+        caution: "写槽满和事件槽满都要有 dropped 计数。"
+      },
+      {
+        id: "can-async-write", priority: "must", difficulty: "advanced", tags: ["异步写", "pthread", "背压"],
+        q: "为什么接收线程和 SD 卡写线程要解耦？队列满了怎么办？",
+        brief: "同步写盘会把不可控的文件系统/SD 延迟带进 CAN 接收关键路径；异步线程通过有界队列隔离，但队列满必须显式告警并保护旧现场。",
+        a: `<p>CAN 接收的首要任务是及时 drain socket、记录和检测；SD 写入可能被擦除、缓存、挂载或坏块拖延。项目将完成的快照复制到固定写槽，用 mutex + condition variable 交给 writer thread；writer 负责 .tmp、块 CRC、索引、fsync 和 rename。</p><p>队列满时不动态扩容：保留当前冻结快照，重试入队并记录 dropped/overflow；根据产品策略可以丢新快照、降低采集或停机保护，但不能悄悄覆盖旧现场。条件变量用 while 重新检查队列和 stop，防止虚假唤醒。</p>`,
+        followups: [{ q: "为什么不用无锁队列？", a: "可以做，但需要严格定义固定槽所有权、内存序和 ABA/关闭语义；当前有界 pthread 队列更易审计和测试，性能已用测试数据验证。" }],
+        evidence: "src/log_writer.c、src/recorder.c；docs/14 Q4/Q25",
+        boundary: "用户态 writer 使用 mutex/condition，不要套用内核 spinlock 说法。",
+        caution: "异步不等于数据一定落盘，仍要讨论 fsync 和掉电边界。"
+      },
+      {
+        id: "can-bbx", priority: "must", difficulty: "advanced", tags: ["二进制日志", "CRC32", "恢复"],
+        q: ".bbx 二进制日志如何保证可恢复？",
+        brief: "固定小端布局、文件头/块头/载荷 CRC32、序号与索引、tmp + fsync + 原子 rename；启动逐块校验，尾部损坏截断并重建索引。",
+        a: `<ol><li>文件头写 magic、版本、记录大小、创建时间和 CRC；所有多字节字段固定小端。</li><li>数据按事件块/报文块/索引块组织，每块有长度、序号、类型、载荷 CRC32。</li><li>先写临时文件，块和索引完成后 <code>fsync(file)</code>，再同一文件系统内 <code>rename</code>；目录项变化也应考虑目录 fd fsync。</li><li>启动时从头逐块检查 magic、长度、序号和 CRC；保留最后一个完整边界，截断坏尾并重建索引，无法满足格式约束的文件单独标坏。</li></ol>`,
+        followups: [{ q: "为什么不只给整个文件一个 CRC？", a: "整文件 CRC 只能知道整体坏；分块 CRC 能定位坏边界，保留前面完整数据。" }, { q: "fsync 成功就绝对不丢数据吗？", a: "不是。它降低内核缓存窗口，但硬件写缓存、电源和文件系统仍有边界；项目把真实异常掉电 T09 标为条件受限。" }],
+        evidence: "src/binlog.c；docs/09、14 Q26-Q30",
+        boundary: "不能宣称已经证明物理掉电下零丢失。",
+        caution: "rename 原子性有同一文件系统前提。"
+      },
+      {
+        id: "can-storage-guard", priority: "must", difficulty: "advanced", tags: ["SD", "挂载保护", "可靠性"],
+        q: "SD 卡缺失或挂载错了，为什么要阻止采集器启动？",
+        brief: "日志如果误写 NFS/rootfs 可能占满系统盘并掩盖存储故障；storage_guard 用挂载点和 st_dev 确认是独立介质，不满足就拒绝采集。",
+        a: `<p>启动/运行时检查挂载点存在、可写，并通过 <code>stat</code> 对比日志目录与预期独立设备的 <code>st_dev</code>；仅有目录或 NFS rootfs 不算 SD 就绪。拔卡后 Supervisor 记录 STORAGE_MISSING，停止采集器；挂载恢复并通过 guard 后再重启。</p><p>这是故障隔离而不是“让程序尽量写下去”：明确拒绝写错介质，避免把存储风险扩散为系统不可启动。</p>`,
+        followups: [{ q: "为什么不缓存到 rootfs 等 SD 恢复？", a: "会和系统空间竞争、掉电风险更大，也可能改变‘现场必须落在独立介质’的产品语义；若产品允许，需配置明确上限和转储策略。" }],
+        evidence: "src/storage_guard.c；scripts/S35can-storage；docs/10",
+        boundary: "挂载保护不等于 SD 健康检测，坏块/只读仍要处理。",
+        caution: "要说明拔卡和重新挂载的状态转移。"
+      },
+      {
+        id: "can-supervisor", priority: "must", difficulty: "advanced", tags: ["Supervisor", "心跳", "进程恢复"],
+        q: "为什么 Supervisor 不能由采集器自己重启？它如何判断卡死？",
+        brief: "采集器崩溃、死循环或 SIGSTOP 时无法自救；独立父进程监控退出、固定格式心跳、存储状态和重启频率，并用冷却防止无限重启。",
+        a: `<p>Supervisor 以 <code>epoll + timerfd + signalfd + SIGCHLD</code> 统一事件，fork/exec 采集器并保留心跳 pipe。采集器约每秒写固定 96 字节心跳，带 magic、版本、PID、单调时间、CAN 在线、接收数和日志状态；Supervisor 处理半条消息，校验长度、magic、PID 和时间。超过约 3500 ms 无有效心跳，先 SIGTERM，宽限期后 SIGKILL 并 waitpid 回收。</p><p>最近 60 秒内启动达到 5 次进入 30 秒 cooldown，避免故障时重启风暴；父死信号和清理路径避免留下孤儿进程。</p>`,
+        followups: [{ q: "SIGSTOP 为什么最终要 SIGKILL？", a: "SIGSTOP 不能捕获或处理，SIGTERM 对它无效；统一宽限后必须 SIGKILL，并 waitpid 回收。" }, { q: "为什么校验心跳 PID？", a: "避免 fd 继承、旧进程或异常路径的数据被误认为当前子进程健康。" }],
+        evidence: "src/supervisor.c、heartbeat.c、restart_policy.c；docs/12",
+        boundary: "心跳只能证明进程按路径运行，不能证明业务每个模块正确。",
+        caution: "Supervisor 自身也需要退出清理和启动脚本保护。"
+      },
+      {
+        id: "can-interface-recovery", priority: "should", difficulty: "advanced", tags: ["CAN恢复", "ENETDOWN", "重连"],
+        q: "CAN 接口 DOWN 时，采集器为什么不直接退出？恢复流程怎么做？",
+        brief: "把可恢复的链路错误当作状态变化：移除旧 fd、保留 timer/signal、周期重开并重新加入 epoll，同时清空旧基线避免误报。",
+        a: `<p>读取遇到 <code>ENETDOWN/ENODEV</code> 等可恢复错误时，关闭旧 socket 并从 epoll 移除，但保留统计、检测和退出 fd。每秒尝试 <code>bb_can_open</code>，成功后重新注册 socket；恢复时重置 Alive、周期和 last_seen 基线，第一帧用于同步，不把断线期间的未知间隔当作周期故障。不可恢复错误仍交给 Supervisor。</p>`,
+        followups: [{ q: "重连期间的报文怎么办？", a: "如实记录接口离线时间和恢复事件；无法接收的帧不能伪造，快照中标记链路空洞。" }],
+        evidence: "docs/11 第 5.10 节；src/can_source.c/main.c",
+        boundary: "应用重连不等于驱动或物理线路一定恢复。",
+        caution: "要避免重连忙循环和重复告警。"
+      },
+      {
+        id: "can-physical-debug", priority: "must", difficulty: "base", tags: ["CAN", "物理链路", "排查"],
+        q: "CAN 接口出现但收不到帧，你按什么顺序排查？",
+        brief: "接口状态→bitrate/sample point→原始 candump→接线/终端/供电/ACK→错误统计→过滤器/应用解析。",
+        a: `<ol><li><code>ip -details link show can0</code> 看 UP、bitrate、sample point、state、restart-ms。</li><li>用 <code>candump can0</code> 判断原始帧是否到达，避免先怀疑解析。</li><li>确认 CANH/CANL/GND、两端约 60Ω（两只 120Ω 并联）、收发器供电/standby、对端是否发送和 ACK。</li><li>看 <code>ip -details -statistics</code> 的 rx_errors、rx_dropped、overrun、bus-off 和错误帧。</li><li>最后检查 SocketCAN filter、ID/DLC/CRC、线程是否读取以及日志输出是否阻塞。</li></ol>`,
+        followups: [{ q: "为什么总线两端需要 120Ω？", a: "匹配差分线特性阻抗，减少反射；两只并联测得约 60Ω。具体板端已有终端时不能盲目再并。" }, { q: "ACK 错误意味着什么？", a: "发送者在 ACK slot 没看到其他节点 dominant，可能是只有一个节点、bitrate/接线错误或收发器问题；会增加发送错误计数。" }],
+        evidence: "docs/14 Q39、Q49-Q54；docs/11 实机联调",
+        boundary: "sample point 实际值可能因控制器量化而和目标略有差异。",
+        caution: "不要用‘ERROR-ACTIVE’证明业务链路正常。"
+      },
+      {
+        id: "can-s32k-faults", priority: "must", difficulty: "base", tags: ["S32K144", "故障注入", "测试"],
+        q: "S32K144 的六种故障模式怎样注入？",
+        brief: "normal、heartbeat_loss、period_jitter、counter_jump、crc_error、burst；通过串口命令控制可重复，避免人工制造偶发性。",
+        a: `<ul><li><code>normal</code>：0x100/0x200/0x300 按 10/100/1000 ms 发送。</li><li><code>heartbeat_loss</code>：停止 0x200。</li><li><code>period_jitter</code>：把 0x100 周期改成 30 ms。</li><li><code>counter_jump</code>：0x100 Alive 每次跳 2。</li><li><code>crc_error</code>：翻转最后一个应用 CRC 字节。</li><li><code>burst</code>：每 100 ms 额外发送 20 个快速帧。</li></ul><p>每个模式要有进入、保持、退出和恢复验证；测试报告要把故障注入时间、检测事件、快照内容和恢复时间对应起来。</p>`,
+        followups: [{ q: "为什么 CRC 错误帧仍能在 CAN 控制器层收到？", a: "这里翻转的是应用 payload 的 CRC 字节，CAN 控制器帧级 CRC 仍然正确；应用协议层检测到错误。" }],
+        evidence: "mcu/s32k144/src/ecu_simulator.c；docs/14 Q19",
+        boundary: "这是 payload CRC，不是强行制造 CAN 控制器 CRC error。",
+        caution: "真实物理错误注入需要专门工具或硬件，不能把两者混为一谈。"
+      },
+      {
+        id: "can-tests", priority: "must", difficulty: "base", tags: ["测试", "122项", "结果边界"],
+        q: "122 项测试通过具体说明了什么？不能说明什么？",
+        brief: "T01～T08 的 122 项自动化测试覆盖正常稳定、各类故障、强杀恢复和截断恢复；T09 真实异常掉电受设备限制，不能宣称零丢失。",
+        a: `<p>可量化结果：T01 连续 2 小时增量接收 832,832 条，RSS 峰值 936 KB、CPU 0.64%；T07 采集器强杀恢复 20/20，约 2.2～2.6 秒；T08 截断日志恢复 20/20。T02～T06 覆盖心跳停止、Counter 跳变、CRC 错误、周期抖动和 burst。真实链路还结合 can0 的 rx_dropped/rx_errors 和 S32K 计数。</p><p>这些结果证明当前测试条件下功能和软件恢复路径通过，不证明任意负载、任意 SD、电源瞬断或所有物理故障下绝对不丢帧。T09 因缺少独立电源控制设备标记为条件受限。</p>`,
+        followups: [{ q: "RECEIVED=VALID 能证明没有丢帧吗？", a: "不能，只说明进入采集器的帧都通过应用校验；还要结合发送端计数、can0 错误/丢弃统计、控制器 overrun 和物理链路。" }],
+        evidence: "README；stage6 结果；docs/13/14",
+        boundary: "所有数字必须带测试时间、平台和条件。",
+        caution: "面试官追问 T09 时主动承认限制。"
+      },
+      {
+        id: "can-dropped-zero", priority: "must", difficulty: "trap", tags: ["丢包", "统计", "严谨表述"],
+        q: "你怎么表述‘突发测试丢包和错误均为 0’才严谨？",
+        brief: "说成测试期间 Linux can0 的 rx_dropped/rx_errors/overrun 与应用事件丢弃计数为 0；不能泛化成总线在任何工况零丢包。",
+        a: `<p>建议说：“在 T06 配置的 burst 速率、持续时间和硬件链路下，Linux can0 的 <code>rx_dropped</code>、<code>rx_errors</code>、overrun，以及采集器写槽/事件槽 dropped 计数均为 0；应用收到的帧与 S32K 发送统计一致。这个结果不覆盖更高总线负载、SD 极端延迟、掉电或未测试的物理干扰。”</p><p>统计必须区分内核接收、应用读取、协议有效和落盘成功四个层次。</p>`,
+        followups: [{ q: "如何测总线负载？", a: "按帧位数（含仲裁、stuff、CRC、ACK、帧间隔）乘帧率除 bitrate，或用控制器/分析仪测量；不能只用 payload 字节估算。" }],
+        evidence: "docs/14 Q41；stage6 结果",
+        boundary: "这是面试表达校准，不是新增测试结论。",
+        caution: "别把错误帧数和丢包数混为一谈。"
+      },
+      {
+        id: "can-fork-exec", priority: "should", difficulty: "advanced", tags: ["Linux", "fork", "exec", "进程"],
+        q: "Supervisor fork/exec 采集器时，fd 和心跳如何传递？",
+        brief: "fork 后父子各自关闭不需要的 pipe 端，exec 替换进程映像但 PID 保持，心跳 fd 通过环境/约定传给新映像，FD_CLOEXEC 只对不应继承的 fd 生效。",
+        a: `<p><code>fork</code> 后父子逻辑地址空间独立、物理页写时复制；fd 表项指向同一 open file description。子进程关闭心跳 pipe 读端和父侧资源，清除需要传给 exec 的 fd 的 close-on-exec，并通过环境变量或固定 fd 号告诉采集器。<code>exec</code> 只替换代码/数据/堆栈，PID 不变；父进程通过 <code>waitpid</code> 回收并区分退出码/信号。</p>`,
+        followups: [{ q: "pipe 什么时候读到 EOF？", a: "所有写端都关闭后读端返回 0；要注意 fork/exec 后意外继承的写端会让 EOF 永远不来。" }],
+        evidence: "docs/14 Linux 用户态 Q；src/supervisor.c",
+        boundary: "回答以项目使用的 pipe/exec 设计为准。",
+        caution: "不要把虚拟地址‘共享’说成父子进程可直接共享变量。"
+      },
+      {
+        id: "can-signal-safe", priority: "should", difficulty: "advanced", tags: ["signalfd", "信号", "并发"],
+        q: "为什么不用复杂的异步信号处理函数，而使用 signalfd？",
+        brief: "异步 handler 只能调用少量 async-signal-safe 函数，不能安全地 printf/malloc/加 pthread 锁；signalfd 把信号转成 epoll 可读事件，逻辑集中在主循环。",
+        a: `<p>启动时先阻塞要处理的 SIGINT/SIGTERM/SIGCHLD，再创建 signalfd 并加入 epoll；主循环 read 出 <code>signalfd_siginfo</code> 后统一做 stop、child reaping 和状态转移。这样写线程也继承信号屏蔽，避免信号随机落到线程。关闭顺序仍要先通知 writer、等待退出，再释放 fd。</p>`,
+        followups: [{ q: "如果 signalfd 创建晚于写线程会怎样？", a: "线程可能在继承信号屏蔽前收到 SIGINT，绕过主循环造成非一致退出；项目记录中修复了创建顺序并增加测试。" }],
+        evidence: "docs/11 第 5.12 节；src/main.c/supervisor.c",
+        boundary: "signalfd 是 Linux 用户态设计，不能泛化到 MCU ISR。",
+        caution: "信号屏蔽和线程创建顺序是关键。"
+      },
+      {
+        id: "can-diagnose-hang", priority: "must", difficulty: "base", tags: ["进程卡死", "Linux", "排查"],
+        q: "采集器进程卡死时，你如何定位而不只是重启？",
+        brief: "Supervisor 先保服务，再用状态文件、心跳、wchan、fd、strace/gdb 和日志快照判断阻塞点，重启前保留现场。",
+        a: `<ol><li>看 Supervisor 心跳是否停止、最后状态和重启原因。</li><li>查看 <code>/proc/PID/status</code>、线程数、RSS、<code>wchan</code>、<code>/proc/PID/fd</code>，判断睡眠在 I/O、futex 还是轮询。</li><li>用 <code>strace -p</code> 观察系统调用，必要时 gdb 获取所有线程栈；检查 writer queue、CAN socket、timerfd 和锁。</li><li>保存原始日志、状态和 core 后再按策略终止/重启；修复后增加可复现压力或故障用例。</li></ol>`,
+        followups: [{ q: "为什么 Supervisor 仍然要重启？", a: "恢复服务和定位根因是两条线；故障现场应被保留，不能让系统为了等待人工分析一直不可用。" }],
+        evidence: "docs/14 Linux 用户态 Q；src/supervisor.c/heartbeat.c",
+        boundary: "strace/gdb 是否在目标板可用要看 rootfs 和权限。",
+        caution: "排查命令不要写成会破坏现场的操作。"
+      },
+      {
+        id: "can-physical-boundary", priority: "must", difficulty: "trap", tags: ["项目边界", "Linux驱动", "诚实"],
+        q: "这个项目是否自己写了 CAN 内核驱动？从 DTS 到 can0 你能讲到哪里？",
+        brief: "没有独立开发 FlexCAN 内核驱动，使用系统已有实现；能讲 DTS/pinctrl/clock/interrupt→probe→net_device→CAN core→SocketCAN 的链路和排查方法。",
+        a: `<p>准确表述是：项目主要负责 Linux 用户态 SocketCAN 应用和板端联调，i.MX6ULL 使用内核已有 FlexCAN 驱动。设备树节点经过匹配后，驱动 probe 获取寄存器、时钟、pin、IRQ，初始化控制器并注册 CAN 类型的 <code>net_device</code>；网络设备出现为 <code>can0</code> 后，SocketCAN RAW socket 才能在用户态收发。</p><p>我可以用 <code>dmesg</code>、<code>ip -details</code>、<code>/proc/interrupts</code>、candump 和错误统计定位链路问题，但不会把这段用户态工作包装成自研内核驱动。</p>`,
+        followups: [{ q: "CAN 为什么是 net_device 而不是字符设备？", a: "CAN 帧属于网络协议栈，需要接口状态、队列、过滤、错误状态和网络统计；SocketCAN 提供统一 socket 抽象。" }],
+        evidence: "docs/14 第 8 节；i.MX6ULL 内核配置/启动文档",
+        boundary: "这是项目可信度的核心边界。",
+        caution: "不确定目标内核版本的 API 时不要背函数名。"
+      },
+      {
+        id: "can-can-basics", priority: "must", difficulty: "base", tags: ["CAN", "仲裁", "物理层"],
+        q: "CAN 为什么能无损仲裁？低 ID 为什么优先？",
+        brief: "dominant 0 覆盖 recessive 1，节点边发边读；发送 1 却读到 0 的节点退出，数值更小的 ID 通常在高位先发送 dominant。",
+        a: `<p>CANH/CANL 采用差分传输，逻辑 0 为 dominant，逻辑 1 为 recessive，总线类似线与。多个节点同时发送时，每个节点在仲裁段监视总线；若自己发送 recessive 却读到 dominant，说明有更高优先级节点，立即停止发送而不破坏获胜帧。标准 ID 从高位到低位仲裁，因此较小数值往往有更多高位 dominant，优先级更高。输者稍后自动重发，仲裁失败不计为错误。</p>`,
+        followups: [{ q: "为什么需要 ACK？", a: "发送节点在 ACK slot 发 recessive，正确收到帧的任意节点发 dominant，发送者知道至少有一个接收者；没有 ACK 会重发并增加错误计数。" }],
+        evidence: "js/data.js protocols；docs/14 CAN 基础",
+        boundary: "项目使用经典 CAN 标准帧、8 字节 payload、500 kbit/s，不是 CAN FD。",
+        caution: "应用 payload CRC 与控制器仲裁/CRC 分层回答。"
+      },
+      {
+        id: "can-bus-off", priority: "should", difficulty: "advanced", tags: ["CAN", "Bus-Off", "错误"],
+        q: "Error Active、Error Passive 和 Bus-Off 如何区分？",
+        brief: "控制器按 TEC/REC 维护错误状态；错误累计到被动阈值后行为受限，TEC 继续升高到 bus-off 则退出总线。restart-ms 只是恢复机制，不修物理原因。",
+        a: `<p>控制器发现 bit/stuff/CRC/form/ACK 等错误会发送 error flag，并更新发送/接收错误计数。Error Active 可发送主动错误标志；Error Passive 计数达到阈值后发送行为受限；Bus-Off 通常由 TEC 超过控制器规定上限触发，节点停止参与总线。Linux 可配置 <code>restart-ms</code> 自动重启，但如果 bitrate、终端、收发器或对端仍有问题，会再次 bus-off。</p>`,
+        followups: [{ q: "看到 ERROR-ACTIVE 能说明应用正常吗？", a: "不能，它只说明尚未进入被动/Bus-Off；还要看业务帧、周期、内容、错误计数和对端状态。" }],
+        evidence: "docs/14 Q44-Q48；SocketCAN 统计",
+        boundary: "具体阈值以控制器手册为准，教材数值不要绝对化。",
+        caution: "恢复状态不等于根因消失。"
+      },
+      {
+        id: "can-bitrate", priority: "should", difficulty: "advanced", tags: ["CAN", "位时序", "sample point"],
+        q: "bitrate、sample point、TQ、SJW 分别是什么？为什么实际 sample point 可能和目标不同？",
+        brief: "一个 bit 由 TQ 划分为 Sync/Prop/Phase 段；sample point 是采样位置，SJW 是重同步调整上限，整数 BRP/TSEG 约束会量化目标值。",
+        a: `<p>bitrate 是每秒 bit 数；一个 bit 由多个 time quantum 组成，通常有 Sync、Prop、Phase Segment 1/2。sample point 位于 Phase 1 末端，是接收采样时刻；SJW 规定重同步时相位段最多调整多少 TQ。目标 sample point 需要结合 CAN 时钟、BRP、TSEG1/TSEG2 和控制器约束选择。</p><p>例如指定 0.875 后，驱动只能选择合法整数参数，实际可能显示 0.866；以 <code>ip -details</code> 的最终 bitrate/tq/sample-point 和两端一致性为准。</p>`,
+        followups: [{ q: "sample point 越高越好吗？", a: "不是。要结合线长、传播延迟、时钟误差和控制器范围；关键是两端配置可实现且实测稳定。" }],
+        evidence: "docs/14 Q50-Q52",
+        boundary: "具体 FlexCAN 时钟和参数按目标板配置。",
+        caution: "不要只对齐名义 bitrate 而忽略 sample point。"
+      },
+      {
+        id: "can-reliable-shutdown", priority: "should", difficulty: "advanced", tags: ["退出", "fsync", "资源"],
+        q: "采集器收到 SIGTERM 时如何优雅退出？",
+        brief: "停止接收新任务→通知 writer→等待/flush→提交或标记日志→关闭 CAN/epoll/timer/signalfd→返回状态；超时由 Supervisor 强制终止。",
+        a: `<ol><li>signalfd 事件设置 stop 标志，主循环不再接收新的快照。</li><li>给 writer 线程发送 stop，条件变量唤醒它；writer 完成已入队槽、写索引并 fsync。</li><li>关闭/移除 CAN socket、timerfd、signalfd 和 epoll，释放固定缓冲和 mutex/cond。</li><li>写入退出原因和统计，返回可区分的退出码；Supervisor waitpid 后记录。</li></ol><p>优雅退出有宽限期，卡死或 SIGSTOP 时最终由 Supervisor SIGKILL；因此日志格式也要能从半成品恢复。</p>`,
+        followups: [{ q: "为什么要先停止接收再 flush？", a: "避免退出过程中不断产生新快照导致 drain 不完；已入队的数据由 writer 负责完成，未入队的现场按边界记录。" }],
+        evidence: "src/main.c、log_writer.c、supervisor.c；tests/test_signal_shutdown.sh",
+        boundary: "真实电源瞬断不等于 SIGTERM，T09 仍受限。",
+        caution: "退出顺序和线程 join 很容易造成死锁，要能解释。"
+      },
+      {
+        id: "can-improvement", priority: "should", difficulty: "base", tags: ["复盘", "下一步"],
+        q: "如果重新做一次 CAN 黑匣子，你会改进什么？",
+        brief: "补独立电源控制完成 T09；增加共享协议描述生成、写队列满/只读/长断线/时间回拨压力测试，建立 CAN 负载/延迟/吞吐基准。",
+        a: `<p>优先级最高的是接入可控电源或继电器，完成真实异常掉电和冷启动恢复。工程上把 Linux 与 S32K144 的 CAN ID/DLC/CRC/Counter 定义抽成共享描述或生成代码，减少两端漂移；测试上增加写队列满、SD 只读/拔插、长时间断线、NTP 时间回拨、极端突发和 CPU/内存压力；性能上记录总线负载、端到端检测延迟、快照完成时延和落盘吞吐。最后再考虑压缩、加密和远程上传。</p>`,
+        followups: [{ q: "为什么不先加更多功能？", a: "当前核心功能已通过，最大未闭环风险是电源与存储边界；先补能改变可靠性结论的测试，再扩展功能。" }],
+        evidence: "docs/14 Q42；README 后续里程碑",
+        boundary: "改进项不是已完成能力。",
+        caution: "面试中明确‘计划’与‘结果’的时态。"
+      },
+      {
+        id: "can-file-maps", priority: "should", difficulty: "base", tags: ["代码阅读", "模块职责"],
+        q: "请从代码目录说出 CAN 黑匣子各模块职责。",
+        brief: "can_source 接口，protocol 协议，detector 检测，ring_buffer/recorder 快照，binlog/log_writer 持久化，storage_guard 存储，heartbeat/supervisor 恢复。",
+        a: `<table><thead><tr><th>模块</th><th>职责</th></tr></thead><tbody><tr><td><code>can_source.c</code></td><td>SocketCAN 打开、非阻塞、过滤、接口恢复</td></tr><tr><td><code>protocol.c</code></td><td>ID、DLC、Counter、CRC 校验</td></tr><tr><td><code>detector.c</code></td><td>心跳/周期/突发/CRC/Counter 异常</td></tr><tr><td><code>ring_buffer.c</code> / <code>recorder.c</code></td><td>滚动历史与故障前后快照</td></tr><tr><td><code>binlog.c</code> / <code>log_writer.c</code></td><td>.bbx 编码、CRC、索引、异步写盘/恢复</td></tr><tr><td><code>storage_guard.c</code></td><td>挂载设备和独立介质保护</td></tr><tr><td><code>heartbeat.c</code> / <code>supervisor.c</code></td><td>进程健康、退出、重启和冷却</td></tr></tbody></table><p>回答后挑一个数据流串起来，不要逐文件念目录。</p>`,
+        followups: [{ q: "为什么 protocol 不直接写 detector？", a: "协议模块只负责解析和校验，检测器消费规范化事件；这样协议单测和检测策略可以独立变化。" }],
+        evidence: "can-blackbox-worktree/src、include/blackbox、README 阅读顺序",
+        boundary: "模块职责以当前分支为准。",
+        caution: "避免把测试工具说成产品运行时模块。"
+      },
+      {
+        id: "can-uds-boundary", priority: "should", difficulty: "base", tags: ["UDS", "CAN", "项目边界"],
+        q: "CAN 黑匣子和 UDS 是什么关系？你做了完整 UDS 吗？",
+        brief: "黑匣子采集周期报文和 CAN 错误，UDS 是诊断应用层；本项目不是完整 UDS server/client，最多可以把 UDS 作为后续诊断扩展。",
+        a: `<p>CAN 是底层总线承载，UDS 是诊断应用层，长诊断数据通常还需要 ISO-TP。黑匣子当前关注 0x100/0x200/0x300 等周期报文、应用 CRC、Counter、异常检测和持久化，不是完整的 UDS 会话、Seed-Key、DTC 或刷写服务器。若扩展，可把诊断请求作为额外采集/标记事件，并注意过滤器和多帧时序。</p>`,
+        followups: [{ q: "如果面试岗位偏 UDS，你如何连接这段项目？", a: "讲清协议分层、CAN filter、时间戳和故障现场的价值，再用经纬恒润的 UDS Bootloader 经历回答诊断流程，不把两个项目硬说成同一实现。" }],
+        evidence: "docs/14 Q55；简历经纬恒润项目",
+        boundary: "项目没有实现完整 UDS 栈。",
+        caution: "不为匹配 JD 过度包装。"
+      },
+      {
+        id: "can-interview-unknown", priority: "should", difficulty: "base", tags: ["面试表达", "不会的问题"],
+        q: "面试官问到 CAN 黑匣子里你没实现过的部分，怎么回答？",
+        brief: "先划边界，给已知链路和证据，再给排查/实现路径；不把相邻概念的知识冒充代码经验。",
+        a: `<p>可用模板：“这部分我没有在当前项目中直接实现，项目边界是 X；我能确认的是 A→B→C 链路，代码/测试证据在……。如果要补，我会先查目标内核 binding/协议规范，做最小实验，再用 Y 命令和 Z 用例验证。需要我先回答我实际做过的快照/恢复部分吗？”</p><p>这种回答比猜一个函数名更可靠，也能把对话拉回你的强项。</p>`,
+        followups: [{ q: "面试官继续追问理论怎么办？", a: "理论可以回答，但用‘标准行为/常见实现’措辞，不声称项目已经落地；同时说明对当前产品需要确认的约束。" }],
+        evidence: "项目文档中的‘必须先讲清项目边界’和已知边界章节",
+        boundary: "这是全项目通用的防守策略。",
+        caution: "不懂时停顿确认，比连续编造更好。"
+      }
+    ]
+  },
+  {
+    id: "debug-methods", name: "调试与故障排查", icon: "bug", track: "resume",
+    desc: "面试官问‘怎么调试’时，用现象→假设→观测→定位→修复→回归六步，避免只列工具名。",
+    questions: [
+      {
+        id: "debug-framework", priority: "must", difficulty: "base", tags: ["方法论", "高频", "六步"],
+        q: "遇到一个问题，你通常怎么排查？",
+        brief: "先固定现象和版本，再建立可证伪假设，用最低成本观测收敛，修复后做针对性和邻近回归。",
+        a: `<ol><li><strong>定义：</strong>输入、期望、实际、频率、版本、硬件和环境。</li><li><strong>分层：</strong>电源/引脚/外设→驱动/DMA/中断→协议/数据→RTOS/并发→应用/UI。</li><li><strong>假设：</strong>一次只验证一两个变量，优先可观测且风险低的点。</li><li><strong>观测：</strong>日志/计数器/波形/寄存器/原始帧/栈回溯，记录时间戳和上下文。</li><li><strong>定位修复：</strong>解释根因和为什么改动能消除它，保留错误路径处理。</li><li><strong>回归：</strong>原问题、相邻功能、压力和异常场景，更新文档和版本。</li></ol>`,
+        followups: [{ q: "如何保证调试手段不改变问题？", a: "优先硬件仪器和低扰动计数，日志限速/异步化，避免在 ISR/实时路径加入阻塞 printf。" }],
+        evidence: "三段实习联调；两个项目故障设计",
+        boundary: "方法必须用一个真实案例落地。",
+        caution: "工具是手段，不是排查顺序。"
+      },
+      {
+        id: "debug-global-wrong", priority: "must", difficulty: "base", tags: ["C", "全局变量", "排查"],
+        q: "全局变量的值和预期不一致，你怎么查？",
+        brief: "先确认是否同一个地址和类型，再查写入者、并发/volatile、越界/DMA、初始化/链接和调试器优化。",
+        a: `<ol><li>用调试器查看符号地址、类型、作用域，排除同名 static/宏或观察了错误镜像。</li><li>对变量设硬件 watchpoint，找出第一次错误写入者；全局搜索所有写路径。</li><li>检查 ISR/线程并发、编译优化、是否缺 volatile/锁，确认读改写是否原子。</li><li>查数组越界、野指针、DMA 缓冲覆盖、栈溢出和内存踩踏。</li><li>核对启动初始化、链接段、复位原因和多镜像/缓存；修复后跑压力回归。</li></ol>`,
+        followups: [{ q: "volatile 能解决吗？", a: "只保证编译器每次从内存读写，不保证读改写原子和线程互斥；仍需锁/临界区或原子操作。" }],
+        evidence: "C 语言题库；watch1 ISR/DMA 共享标志实例",
+        boundary: "在 MCU 上没有硬件 watchpoint 时用低扰动日志或数据断点替代。",
+        caution: "先找第一处错误写入，不要只盯最终错误值。"
+      },
+      {
+        id: "debug-i2c-noack", priority: "must", difficulty: "base", tags: ["I2C", "波形", "总线"],
+        q: "I2C 设备读不到数据，你如何快速定位？",
+        brief: "供电/地址/上拉→START/ACK→寄存器地址/重复 START→时序/速率→驱动状态机和超时恢复。",
+        a: `<p>先查电源、复位和 SDA/SCL 是否被正确上拉；示波器/逻辑分析仪确认 START、7 位地址、R/W、每个字节 ACK、寄存器地址、重复 START 和 STOP。NACK 要区分地址错、设备未上电、器件忙和时序不符。再看 HAL 返回码、总线是否卡低、超时后是否产生 STOP/复位控制器。最后核对端序、寄存器页和数据有效位。</p>`,
+        followups: [{ q: "I2C 为什么需要上拉，SPI 通常不需要？", a: "I2C SDA/SCL 是开漏线，设备只能拉低，需要上拉回到高电平；SPI 通常是推挽输出，但 CS/电平和多从机拓扑仍要按硬件设计。" }],
+        evidence: "watch1/hal/hal_i2c_stm32.c；硬件与协议题库",
+        boundary: "具体地址和速率按器件手册，不凭印象。",
+        caution: "逻辑分析仪显示有时钟不代表设备正确响应。"
+      },
+      {
+        id: "debug-dma-missing", priority: "must", difficulty: "advanced", tags: ["DMA", "中断", "排查"],
+        q: "DMA 数据偶尔丢失或重复，你怎么查？",
+        brief: "核对方向/长度/流/通道、缓冲区所有权、半/全传输事件、缓存一致性、并发复用和错误标志。",
+        a: `<ol><li>确认外设请求、DMA stream/channel、方向、数据宽度、递增模式、循环/普通模式和长度。</li><li>在 half/full/error 回调记录序号、剩余计数和时间，确认是否漏回调或重复消费。</li><li>检查 CPU 是否在 DMA 完成前读写缓冲区，双缓冲切换和队列通知是否有竞态。</li><li>在有 cache 的平台做 clean/invalidate 或 map/unmap；检查地址对齐和生命周期。</li><li>查看 DMA 状态寄存器和错误标志，降低速率做最小实验，再恢复压力。</li></ol>`,
+        followups: [{ q: "DMA 运行时能不能改缓冲区？", a: "不能修改正在传输的那一半；通过双缓冲、所有权标志或停止 DMA 后再切换。" }],
+        evidence: "watch1/hal_spi_stm32.c、hal_uart_stm32.c、ADC 配置",
+        boundary: "STM32F4 无 D-cache 的具体配置要以工程为准，别机械套 cache 结论。",
+        caution: "先确认是采集丢失还是上层消费丢失。"
+      },
+      {
+        id: "debug-race", priority: "must", difficulty: "advanced", tags: ["RTOS", "竞态", "锁"],
+        q: "如何定位一个只在高负载下出现的竞态？",
+        brief: "记录事件顺序和线程/中断上下文，缩小共享状态，使用断言和序号检测，避免用大锁或延时把问题掩掉。",
+        a: `<p>先列出共享变量、写者/读者和期望不变量，再给每次状态变化加单调序号、线程 ID 和时间戳；对关键状态使用 watchpoint/断言。用压力把窗口放大，例如缩短周期、增加 BLE/CAN 突发或暂停某线程，比较加/不加日志的差异。修复时选择消息传递、原子变量、短临界区或互斥锁，并检查锁顺序、优先级反转和 ISR 可用性。</p><p>不要用随意 <code>delay</code> 让问题“消失”，那通常只是改变了调度概率。</p>`,
+        followups: [{ q: "volatile 和 mutex 的边界？", a: "volatile 解决观察到最新内存值，mutex/临界区解决互斥和复合操作原子性；两者不是替代关系。" }],
+        evidence: "watch1 ISR pending、RT-Thread IPC；Linux writer queue",
+        boundary: "工具可用性取决于目标平台。",
+        caution: "锁的持有时间和上下文必须明确。"
+      },
+      {
+        id: "debug-boot", priority: "should", difficulty: "base", tags: ["启动", "U-Boot", "HardFault"],
+        q: "设备上电后卡在启动阶段，你怎么分层排查？",
+        brief: "电源/时钟/复位→BootROM/SPL/U-Boot→设备树/驱动 probe→内核→用户态服务；每段用串口日志、示波器和最小镜像确认。",
+        a: `<ol><li>测电源时序、复位脚、晶振/时钟和启动 strap。</li><li>看串口是否进入 BootROM/SPL/U-Boot，记录每阶段时间和错误码。</li><li>检查存储读写、环境变量、设备树加载和命令行。</li><li>内核阶段看 earlycon/dmesg、驱动匹配/probe、rootfs 挂载。</li><li>用户态看 init/systemd 脚本、权限、设备节点、CAN/网络接口和服务心跳。</li></ol><p>每次只替换一个变量，保留能启动的最小配置作为基线。</p>`,
+        followups: [{ q: "为什么串口日志没有了不一定是死机？", a: "可能是 UART pinmux/波特率切换、日志级别、时钟变化或进入了下一阶段；要结合 GPIO 打点、JTAG 和电流观察。" }],
+        evidence: "海康 U-Boot/DTS 实习；CAN i.MX6ULL 启动文档",
+        boundary: "具体 SoC 启动阶段按平台补充。",
+        caution: "不要把用户态服务失败归因于 BootROM。"
+      },
+      {
+        id: "debug-memory", priority: "must", difficulty: "advanced", tags: ["内存", "泄漏", "栈溢出"],
+        q: "如何区分内存泄漏、堆溢出和栈溢出？",
+        brief: "看资源随时间的趋势和 fault 位置：泄漏是可达对象/未释放，堆溢出破坏分配器边界，栈溢出越过线程栈；分别用统计、ASan/Valgrind、栈水位和 fault frame。",
+        a: `<p>长稳测试观察 RSS/heap free、对象计数和分配失败；主机侧用 ASan/Valgrind、包装 malloc/free 记录调用点，目标侧用固定池、分配统计和退出清理。栈用填充模式/RTOS high-water mark，出现 HardFault 时看 PC/LR/栈边界和 CFSR。堆/栈问题都可能表现为随机崩溃，所以还要查越界、DMA 和 use-after-free。</p>`,
+        followups: [{ q: "RSS 不增长能证明没有泄漏吗？", a: "不能，分配器可能复用或泄漏在固定池/驱动；结合内部对象计数、释放路径和压力循环。" }],
+        evidence: "CAN 项目 RSS 统计；watch1 RTOS 栈/内存设计；C 题库",
+        boundary: "目标板通常不能直接运行所有主机工具。",
+        caution: "不要把虚拟地址增长和物理内存泄漏混为一谈。"
+      },
+      {
+        id: "debug-protocol", priority: "must", difficulty: "base", tags: ["协议", "原始数据", "解析"],
+        q: "报文解析结果不对，你怎么证明是协议还是代码问题？",
+        brief: "先保存原始字节和时间戳，再独立核对 ID/DLC/端序/缩放/Counter/CRC，使用已知输入和参考解析器交叉验证。",
+        a: `<ol><li>抓取原始帧，确认 CAN ID、扩展标志、DLC、每个字节和时间戳。</li><li>根据协议表独立手算一个样本：bit 起止、端序、符号、缩放、偏移、无效值和 CRC。</li><li>用固定样本写单测，覆盖最小/最大、回绕、非法 DLC/CRC 和负值转换。</li><li>对比代码中 mask/shift/类型提升，避免把 <code>can_id</code> 的错误标志位当业务 ID。</li><li>确认上游发送端、过滤器和消息队列没有在解析前丢/改数据。</li></ol>`,
+        followups: [{ q: "CAN can_id 为什么不只是 ID？", a: "高位还可能有 EFF/RTR/ERR 标志，普通标准帧要用 CAN_SFF_MASK 取 ID。" }],
+        evidence: "CAN protocol.c；通用 CAN 题库",
+        boundary: "协议字段具体 bit 定义必须查项目协议。",
+        caution: "不要拿格式化后的日志代替原始帧。"
+      },
+      {
+        id: "debug-regression", priority: "must", difficulty: "base", tags: ["回归", "质量", "交付"],
+        q: "修复一个 Bug 后，你如何决定回归范围？",
+        brief: "根因影响面决定范围：原复现用例必跑，直接调用者/共享模块/并发路径/硬件状态和升级兼容性按风险扩展。",
+        a: `<p>先写根因和修改点，再画调用/数据/状态影响：改解析字段要回归同 ID 的所有 DLC、端序和异常帧；改锁/队列要回归满、空、超时、退出和压力；改 DTS/驱动要回归启动、设备注册、读写和电源状态。测试结果包含版本、配置和未覆盖的边界，未能实机验证的项目明确标记。</p>`,
+        followups: [{ q: "时间不够时先跑哪些？", a: "先跑能证明修复和防止立即回归的最小 smoke，再跑高风险共享路径，最后安排完整回归；风险取舍要记录。" }],
+        evidence: "锐明版本交付；CAN T01-T08；海康 TESSY",
+        boundary: "测试范围不能只按改动文件决定。",
+        caution: "回归通过不是根因分析的替代品。"
+      },
+      {
+        id: "debug-answer-template", priority: "must", difficulty: "base", tags: ["面试技巧", "STAR", "口述"],
+        q: "如何把一次故障排查讲成面试官听得懂的答案？",
+        brief: "用现象（Situation）→影响/目标（Task）→关键动作（Action）→证据结果（Result）→复盘（Lesson），控制在 1～2 分钟。",
+        a: `<p>示例骨架：“在 X 版本、Y 硬件上，出现 Z 现象，影响是……。我先用……确认不是……，再通过……观察到……，根因是……。修复改了……，用原用例和……回归，结果从……到……。复盘是下次提前加……。”</p><p>每个动作都回答“为什么这样查”，每个结果都带条件。面试官继续追问时沿着同一条证据链展开，不突然换成与项目无关的八股。</p>`,
+        followups: [{ q: "没有量化结果怎么办？", a: "给出可观察的状态变化、复现率、测试通过/失败、日志或波形证据；同时说明尚未测量的指标和计划。" }],
+        evidence: "三段实习与两个项目的故障/测试记录",
+        boundary: "模板用于组织真实经历，不用于编故事。",
+        caution: "技术面优先讲因果和证据，少讲情绪。"
+      }
     ]
   }
 ];
-
-// EMBEDDED_DATA 定义已移至 data_supplement.js 末尾
