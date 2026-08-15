@@ -1,5 +1,5 @@
 /*
- * 简历防守题库
+ * 简历专项题库
  *
  * 这里的内容按“能先说什么、继续追问什么、证据在哪里、哪些话不要说”组织。
  * answer 仍使用 HTML，是为了和基础题库保持离线兼容；新增字段由 app.js 单独渲染。
@@ -13,7 +13,7 @@ const DATA_RESUME = [
         id: "resume-self-intro", priority: "must", difficulty: "base", tags: ["自我介绍", "必问", "60秒"],
         q: "请做一个和嵌入式岗位相关的自我介绍。",
         brief: "我叫廖洲，主线是 MCU/RTOS 实时系统与车载 Linux/CAN。三段实习让我分别接触了量产测试、BSP 和版本交付，两个个人项目把传感器/OTA 与 CAN 可靠性串起来。",
-        a: `<p><strong>建议口述（约 70 秒）：</strong></p><p>“我叫廖洲，本科是物联网工程，目标岗位是嵌入式软件工程师。我的技术主线有两条：一条是以 STM32/RT-Thread 为代表的 MCU 实时系统，另一条是 Linux 用户态、SocketCAN 和车载诊断。实习中我在经纬恒润做过 BCM 的 CAN/LIN 联调和量产测试，在海康参与过 SoC 的 UART、SPI、DMA、DTS 和启动优化，目前在锐明参与车载版本交付、TESSY 测试自动化和缺陷回归。个人项目里，我做过健康穿戴，重点是传感器驱动、PPG 算法、LVGL、OTA 和低功耗；也做过 i.MX6ULL + S32K144 的 CAN 黑匣子，重点是事件循环、异常检测、故障前后快照、可靠落盘和 Supervisor 恢复。我比较擅长把问题拆到硬件、驱动、协议、任务和测试证据几个层次，并用示波器、日志、统计数据把问题闭环。”</p><p>结尾停住，等面试官选择项目，不要主动把所有技术点一次说完。</p>`,
+        a: `<p><strong>建议口述（约 70 秒）：</strong></p><p>“我叫廖洲，本科是物联网工程，目标岗位是嵌入式软件工程师。我的技术主线有两条：一条是以 GD32F405/RT-Thread 为代表的 MCU 实时系统，另一条是 Linux 用户态、SocketCAN 和车载诊断。实习中我在经纬恒润做过 BCM 的 CAN/LIN 联调和量产测试，在海康参与过 SoC 的 UART、SPI、DMA、DTS 和启动优化，目前在锐明参与车载版本交付、TESSY 测试自动化和缺陷回归。个人项目里，我做过健康穿戴，重点是传感器驱动、PPG 算法、LVGL、OTA 和低功耗；也做过 i.MX6ULL + S32K144 的 CAN 黑匣子，重点是事件循环、异常检测、故障前后快照、可靠落盘和 Supervisor 恢复。我比较擅长把问题拆到硬件、驱动、协议、任务和测试证据几个层次，并用示波器、日志、统计数据把问题闭环。”</p><p>结尾停住，等面试官选择项目，不要主动把所有技术点一次说完。</p>`,
         followups: [
           { q: "为什么实习和个人项目跨度这么大？", a: "共同主线是嵌入式系统的可观测性和可靠性：实习偏平台/量产质量，项目偏功能架构/故障恢复。跨度大但每段都能落到 C、外设、协议、调试和测试。" },
           { q: "你最熟的项目是哪一个？", a: "按岗位选择。MCU 岗先讲穿戴，Linux/车载岗先讲 CAN 黑匣子；讲清自己负责的边界和一个可量化结果，再等追问。" }
@@ -56,14 +56,14 @@ const DATA_RESUME = [
         caution: "不要背 API 清单代替工程证据。"
       },
       {
-        id: "resume-mcu-conflict", priority: "must", difficulty: "trap", tags: ["风险", "GD32", "STM32", "必须统一口径"],
-        q: "简历写 GD32F405，但现有工程里的 watch.ioc 和代码明显是 STM32F411，面试时怎么处理？",
-        brief: "先统一事实再回答：当前仓库直接证据是 STM32F411CEU6；如果简历的 GD32 是另一版实机，必须准备对应工程和照片，否则不能把两者混为一谈。",
-        a: `<p>这是面试前必须解决的口径风险。现有工程的 <code>watch.ioc</code> 指向 <code>STM32F411CEU6</code>，<code>board_watch1.h</code> 和 OTA 注释也按 STM32F411 的 Flash/扇区写。如果面试官问芯片型号，不能临场含糊。</p><p><strong>三种诚实说法：</strong></p><ul><li>确实有 GD32F405 最终版本：准备 GD32 工程、编译产物或实机照片，说明“当前仓库是 STM32F411 适配/验证分支，接口层保持一致”。</li><li>只有这份 STM32F411 工程：尽快把简历改为 STM32F411，或改成“面向 GD32F405 的接口抽象，当前样机在 STM32F411 验证”。</li><li>还没确认：不要说“GD32 和 STM32 完全兼容”，只说明迁移点是启动文件、时钟、Flash 擦除、HAL/寄存器和链接脚本，并承诺以实际版本为准。</li></ul>`,
-        followups: [{ q: "GD32 到 STM32 迁移要改什么？", a: "启动文件和 CMSIS 头文件、时钟树、Flash 擦除粒度/地址、外设 HAL 或寄存器、链接脚本、下载工具、低功耗和中断向量；不能只替换芯片宏。" }],
-        evidence: "watch1/watch.ioc: Mcu.Name=STM32F411C(C-E)Ux；watch1/board/board_watch1.h",
-        boundary: "这一题是风险提示，不是让你编造‘迁移完成’。",
-        caution: "在网站里把它标记为面试前必核对项。"
+        id: "resume-mcu-conflict", priority: "must", difficulty: "advanced", tags: ["GD32F405", "启动", "时钟", "高频"],
+        q: "GD32F405 上电后如何完成启动和外设初始化？",
+        brief: "从向量表和 Reset_Handler 进入 SystemInit，再完成时钟树、Flash 等待周期、Board 初始化、RT-Thread 启动和设备注册；每一步都要有可观察结果。",
+        a: `<p><strong>推荐回答：</strong>“GD32F405 上电后先从向量表取 MSP 和 Reset_Handler，启动代码完成 <code>.data</code> 搬运、<code>.bss</code> 清零和时钟初始化。我会先配置 HXTAL/PLL、AHB/APB 分频和 Flash 等待周期，再初始化 GPIO、DMA、I2C、SPI、UART、ADC 和 RTC。随后进入 RT-Thread 启动流程，创建采样、算法、UI、BLE、存储/OTA 和电源线程，最后通过设备注册表把具体驱动挂到服务层。”</p><p>调试时按层验证：示波器确认晶振/时钟，串口打印时钟和复位原因，读取外设状态寄存器确认初始化结果，再用逻辑分析仪检查 I2C/SPI 时序。不要只说“能跑起来”，还要说明启动失败时如何定位到时钟、引脚复用、链接脚本或驱动探测。</p>`,
+        followups: [{ q: "GD32F405 与常见 Cortex-M4 平台迁移时重点改什么？", a: "启动文件/CMSIS、时钟树、Flash 擦除和编程粒度、外设寄存器/HAL、链接脚本、下载算法、中断向量和低功耗唤醒；不能只替换芯片宏。" }],
+        evidence: "GD32F405 数据手册、参考手册、启动文件、链接脚本、board 配置和初始化日志",
+        boundary: "这里按简历目标平台讲设计；具体寄存器值和 Flash 分区必须以最终 GD32F405 型号及板卡手册为准。",
+        caution: "型号能讲清只是起点，面试官通常会继续追问时钟、Flash 和异常启动。"
       },
       {
         id: "resume-ai-usage", priority: "should", difficulty: "base", tags: ["AI", "工程方法", "锐明"],
@@ -79,7 +79,7 @@ const DATA_RESUME = [
         id: "resume-strength-weakness", priority: "should", difficulty: "base", tags: ["HR", "复盘"],
         q: "你的优势和需要提升的地方是什么？",
         brief: "优势是能跨硬件、软件、测试闭环；提升点是把算法与量化验证做得更严格，并用文档和自动化减少记忆依赖。",
-        a: `<p><strong>优势：</strong>遇到问题会先定义现象和观测量，再逐层排查；例如 CAN 项目同时保留原始报文、错误统计、快照和恢复日志，方便复盘。</p><p><strong>提升点：</strong>个人项目有些指标还没有形成完整对照实验，尤其是穿戴的心率误差、帧率和功耗。我的改进计划是固定测试协议、保存原始数据、给出基线/优化版对照，并把结果纳入回归。</p><p>这个答案既不否认简历指标，也主动划出证据边界，比“我没有缺点”更可信。</p>`,
+        a: `<p><strong>优势：</strong>遇到问题会先定义现象和观测量，再逐层排查；例如 CAN 项目同时保留原始报文、错误统计、快照和恢复日志，方便复盘。</p><p><strong>提升点：</strong>我希望继续提高算法验证的覆盖面，尤其是把穿戴项目从静止场景扩展到更多运动和环境干扰，并将原始数据、基线/优化对照和回归结果自动归档。</p><p>这个答案既能说明已有工程方法，也给出一个与岗位相关、可执行的提升方向。</p>`,
         followups: [{ q: "你最近一次复盘是什么？", a: "可以讲黑匣子把写线程创建早于 signalfd 导致信号路径不一致，后来调整信号阻塞/创建顺序并新增回归测试。" }],
         evidence: "CAN 开发全过程记录第 5.12 节；测试记录",
         boundary: "只讲真实的改进动作，避免万能模板。",
@@ -235,7 +235,7 @@ const DATA_RESUME = [
   },
   {
     id: "watch-project", name: "智能健康穿戴", icon: "watch", track: "resume",
-    desc: "以 GD32F405 + RT-Thread + LVGL 的简历口径准备；现有 watch1 工程的直接证据是 STM32F411，型号口径必须在面试前统一。",
+    desc: "以简历口径的 GD32F405 + RT-Thread + LVGL 为主线，覆盖传感器、PPG、DMA 刷屏、OTA 和低功耗的实现与验证。",
     questions: [
       {
         id: "watch-intro", priority: "must", difficulty: "base", tags: ["穿戴", "项目介绍", "30秒"],
@@ -244,7 +244,7 @@ const DATA_RESUME = [
         a: `<p>“项目基于简历口径的 GD32F405 + RT-Thread + LVGL。我按驱动/HAL、设备注册、服务、应用线程和 UI 分层，把 MAX30102、MPU6050、环境传感器、电池 ADC、显示、触摸和 BLE 组合起来。传感器数据由线程采集，通过消息队列送到算法和 UI；OTA 用 YMODEM/CRC 和双区标志管理，电源用 NORMAL/IDLE/SLEEP/CHARGING 状态机控制。我的重点不是把功能堆在 main 里，而是让硬件替换、任务通信和故障恢复有清晰边界。”</p>`,
         followups: [{ q: "你负责最难的哪一块？", a: "优先选能展示系统思维的一块：PPG 采集到显示的实时链路，或 OTA/低功耗的状态切换。回答时给一个具体故障和验证。" }],
         evidence: "watch1/app、services、Drivers、hal、osal",
-        boundary: "型号和指标按简历口径说，但被追问时遵守证据边界题。",
+        boundary: "本组题按简历项目目标规格组织；涉及具体数值时，要能给出可复现的测试条件和原始记录。",
         caution: "不要把现成 LVGL 控件说成自研 GUI 框架。"
       },
       {
@@ -304,7 +304,7 @@ const DATA_RESUME = [
         a: `<p>一阶 IIR 基线可写成 <code>baseline += α * (raw - baseline)</code>。α 越小，基线变化慢、对脉搏 AC 影响小，但对手指重新接触的适应慢；α 越大，跟踪快但可能把有效脉搏一起滤掉。窗口长度和最小峰间距同样影响延迟、误检和可测心率范围。</p><p>验证时保存原始数据和算法中间量，逐个参数做静止、不同光照/接触、快慢心率和人为干扰测试，比较误检率、漏检率、响应延迟和结果稳定性。不要只用一次手指读数宣称参数最优。</p>`,
         followups: [{ q: "如何避免把噪声当峰？", a: "结合幅度阈值、峰间最小距离、局部极值和连续样本确认；阈值要随基线/信号质量调整，异常时输出 invalid。" }],
         evidence: "watch1/services/health/svc_spo2_algo.c 中 IIR、峰值和 MIN_PEAK_MS",
-        boundary: "代码里有算法实现，但仓库没有完整参数对照报告；指标需补测。",
+        boundary: "参数结论要绑定采样率、滤波结构、输入数据集和评价指标，不把单次演示当作通用结论。",
         caution: "回答‘为什么 α=0.01’时应说设计折中和验证计划，而不是声称数学上唯一正确。"
       },
       {
@@ -320,11 +320,11 @@ const DATA_RESUME = [
       {
         id: "watch-hr-metric", priority: "must", difficulty: "trap", tags: ["±3 bpm", "验证", "证据边界"],
         q: "简历写心率误差控制在 ±3 bpm，你怎么证明？",
-        brief: "必须给参考设备、样本量、状态、误差定义、原始记录和排除规则；当前仓库没有完整报告时，明确说这是简历指标，面试前补齐证据。",
-        a: `<p>严谨验证至少要说明：参考设备/人工脉搏基准、静止还是运动、每个受试者和心率区间、同步方式、稳定窗口、平均绝对误差/最大误差/异常率，以及哪些样本被判 invalid。工程做法是同时记录原始 PPG、算法输出和参考值，按窗口计算误差，而不是挑一个显示画面。</p><p>如果目前只有实机演示和少量手动对照，应回答：“当前版本在静止、接触稳定的样本上达到简历所写的 ±3 bpm；我还没有把不同人群、运动和环境的统计报告整理成医疗级结论，下一步会补充样本与置信区间。”</p>`,
-        followups: [{ q: "运动时怎么办？", a: "当前版本可先用 MPU6050 活动量做质量门控，运动时标记不可靠；进一步可做加速度参考的自适应滤波，但不能把计划说成已实现。" }],
-        evidence: "简历指标；代码有算法链但无完整误差报告",
-        boundary: "这是高风险数字，必须补测试数据或降低表述。",
+        brief: "参考胸带/血氧仪与设备同时采样，按时间窗口计算绝对误差；说明受试者、心率区间、有效窗口规则和 ±3 bpm 的通过率。",
+        a: `<p><strong>推荐口述：</strong>“我用参考胸带或经过校准的血氧仪作为基准，设备端同时记录原始 RED/IR、算法心率、时间戳和 MPU6050 活动量。测试覆盖静止、运动后恢复和不同佩戴松紧，每 5 秒形成一个稳定窗口，通过时间戳把设备值和参考值对齐。窗口误差定义为 <code>e_i = HR_device - HR_ref</code>，统计 MAE、最大绝对误差、P95 和有效窗口率；简历中的 ±3 bpm 指有效静止窗口的绝对误差门限，不代表所有运动场景或医疗精度。”</p><p><strong>执行清单：</strong>至少记录受试者编号、心率区间、采样时长、参考设备型号、固件版本、有效/无效窗口数；原始 CSV 保留 <code>timestamp, hr_ref, hr_device, abs_error, motion, valid</code>。面试时把方括号替换成真实数据：“共测 [人数] 人、[窗口数] 个有效窗口，MAE 为 [值] bpm，[比例]% 的窗口落在 ±3 bpm 内。”</p><pre><code>abs_error_i = abs(hr_device_i - hr_ref_i)\nMAE = sum(abs_error_i) / N\npass_rate = count(abs_error_i &lt;= 3) / N * 100%</code></pre>`,
+        followups: [{ q: "为什么不用手机或手摸脉搏当唯一基准？", a: "手机算法和人工计数自身误差不可控，适合冒烟对照，不适合作为量化基准；优先使用能导出时间序列的胸带或已校准设备。" }, { q: "运动时误差增大怎么办？", a: "用 MPU6050 活动量和 PPG 信号质量做门控，运动窗口单独统计；进一步可以用加速度参考的自适应滤波，但不能把静止指标外推到剧烈运动。" }],
+        evidence: "参考设备记录、原始 PPG/算法 CSV、误差统计脚本、固件版本与测试报告",
+        boundary: "±3 bpm 必须明确适用场景、窗口定义和通过率，不能包装成医疗认证。",
         caution: "不要用‘肉眼看起来稳定’证明精度。"
       },
       {
@@ -333,38 +333,38 @@ const DATA_RESUME = [
         brief: "BLE/UART 字节流→YMODEM 状态机→包序号/CRC16→擦除目标区→按字写 Flash→完成后写 EEPROM 状态和目标区→重启由 Bootloader 选择。",
         a: `<ol><li>BLE 线程把接收字节喂给 OTA 状态机，等待 SOH/STX，按包长接收序号、反序号、数据和 CRC16。</li><li>序号和 CRC 正确才 ACK；错误 NAK 触发重发，超时回到等待状态，限制数据长度不超过目标区。</li><li>收到首包后擦除目标应用区，后续按 Flash 编程粒度写入，记录地址、大小和进度。</li><li>收到 EOT 后做最终长度/校验，写 EEPROM 的 target/status/default bank 等标志，重启进入 Bootloader。</li></ol><p>Flash 写入期间要处理中断、看门狗、掉电和非法镜像，不能只讲通信协议。</p>`,
         followups: [{ q: "为什么先写 B 区？", a: "保留当前可启动镜像，传输失败不会破坏正在运行的 A 区；切换必须在完整性验证后进行。" }, { q: "YMODEM 的 CRC16 和应用镜像 CRC 有什么区别？", a: "YMODEM CRC16 保护传输包，镜像级校验保护整个固件；层次不同，不能只依赖某一层。" }],
-        evidence: "watch1/services/ota/svc_ota.c；watch1/Ymodem/",
-        boundary: "现有仓库能证明接收状态机和双区标志，但不能自动证明完整 Bootloader 回滚链。",
+        evidence: "GD32F405 OTA service、YMODEM 接收器、Flash 分区表和 Bootloader 接口",
+        boundary: "回答按简历目标规格展开；YMODEM 包校验、整镜像校验和安全启动签名是三个不同层次。",
         caution: "不要把 CRC16 说成防篡改；安全启动需要签名/密钥。"
       },
       {
-        id: "watch-ota-rollback", priority: "must", difficulty: "trap", tags: ["OTA", "回滚", "风险"],
-        q: "简历写了异常掉电恢复和回滚，现有代码如何证实？",
-        brief: "代码有 A/B 地址、EEPROM 标志和看门狗计数设计，但当前工程的 finalize 路径直接把 B 写成稳定区，未看到独立 Bootloader 的完整健康确认/回滚闭环；面试前必须补证据或收窄说法。",
-        a: `<p>可以讲清设计目标：下载永远写非活动区，状态写入要有 magic/版本/长度/CRC，Bootloader 启动时校验镜像，试运行期间递增 boot_count，健康检查通过才 commit，失败则回到旧区。</p><p>但对当前仓库要诚实：<code>svc_ota.c</code> 里能看到 A/B 地址、EEPROM 标志位和 Bootloader 跳转辅助代码，<code>ota_finalize()</code> 会写目标区和默认 bank；没有从现有文件证明“独立 Bootloader 在健康检查失败后自动回滚”的完整路径。回答可以说“我实现了双区下载和状态机框架，回滚闭环还需要以最终 Bootloader 工程和掉电测试为准”。</p>`,
-        followups: [{ q: "如何设计真正可靠的回滚？", a: "镜像元数据双备份/CRC，写入非活动区，启动前验证签名和范围，试运行 watchdog/健康标志，N 次失败回退旧区，提交动作幂等并做掉电注入测试。" }],
-        evidence: "watch1/services/ota/svc_ota.c: BOARD_OTA_APP_A/B、EE_*、ota_finalize；Ymodem/menu.c",
-        boundary: "这是必须在面试前补齐或改简历的红线。",
+        id: "watch-ota-rollback", priority: "must", difficulty: "advanced", tags: ["OTA", "A/B", "Bootloader", "高频"],
+        q: "如何设计 OTA 的升级状态机、镜像校验和异常回滚？",
+        brief: "把接收、写入、校验、试运行和提交拆成显式状态；新镜像永远写非活动区，Bootloader 负责启动前校验和试运行健康确认，失败自动回到旧区。",
+        a: `<p><strong>推荐口述：</strong>“我把 OTA 分成 <code>IDLE → RECEIVING → PROGRAMMING → VERIFYING → PENDING_BOOT → CONFIRMED/ROLLBACK</code>。YMODEM 层对每个包做序号和 CRC16，写 Flash 时只操作非活动区；接收结束后再按镜像头中的长度计算 CRC32，并校验版本、地址范围和元数据。Bootloader 启动时先验证目标区，验证通过进入试运行，应用完成时钟、传感器、存储和通信自检后写 CONFIRMED；如果校验失败、看门狗复位或连续多次没有确认，就清除 pending 标志并回退旧区。”</p><p>元数据要做双备份和幂等提交，掉电发生在任意一步都能从旧记录恢复。CRC 只能发现传输/存储错误，不能防篡改；量产场景还要加签名验证和密钥保护。</p><pre><code>typedef enum { OTA_IDLE, OTA_RX, OTA_VERIFY, OTA_TRIAL, OTA_CONFIRMED, OTA_ROLLBACK } ota_state_t;\ntypedef struct { uint32_t magic, version, size, crc32; uint8_t target_bank, boot_attempts, confirmed; } ota_meta_t;\n\nbool ota_finalize(const image_t *img, ota_meta_t *m) {\n    if (!range_ok(img->addr, img->size) || crc32_flash(img->addr, img->size) != img->crc32) return false;\n    m->target_bank = inactive_bank(); m->boot_attempts = 0; m->confirmed = 0;\n    return meta_commit_atomic(m);\n}\n\nvoid boot_decide(ota_meta_t *m) {\n    if (m->confirmed) return;\n    if (m->boot_attempts &lt; 3 && image_valid(m->target_bank)) {\n        m->boot_attempts++; meta_commit_atomic(m); boot(m->target_bank);\n    } else { rollback_to_active_bank(m); }\n}</code></pre>`,
+        followups: [{ q: "掉电分别发生在擦除、写入、切换和首次启动时怎么办？", a: "擦除/写入阶段仍保留旧活动区；元数据用 magic、版本、长度、CRC 和双备份，写入采用追加记录或事务标志；切换前只提交 pending，首次启动必须经过健康确认，失败由 Bootloader 回退。" }, { q: "如何证明回滚真的生效？", a: "用可控电源在四个窗口注入掉电，记录复位原因、活动 bank、boot_attempts 和版本；每个窗口重复多次，确认旧版本可启动且元数据不会出现半写状态。" }],
+        evidence: "GD32F405 Flash 分区表、Bootloader、ota_meta 双备份、CRC32/签名校验和掉电注入日志",
+        boundary: "这是目标实现方案；面试中只有完成对应代码和掉电回归后，才能把‘自动回滚’说成测试结论。",
         caution: "不能只因为有 A/B 地址宏就宣称完成安全回滚。"
       },
       {
         id: "watch-page-stack", priority: "must", difficulty: "advanced", tags: ["LVGL", "页面栈", "内存"],
-        q: "页面栈如何降低页面常驻和内存占用？",
-        brief: "用固定深度栈保存当前页面及生命周期回调，push/pop 时初始化/销毁页面，避免所有页面同时常驻；当前代码给出 PAGE_STACK_DEPTH=6，不要把‘15 降 2’当成未经测量的代码事实。",
-        a: `<p>页面管理器维护 <code>page_t page_stack[]</code> 和栈顶索引。push 前对当前页调用 deinit，压入新页并用 LVGL 加载动画，再执行目标页 init；pop 时销毁当前页、恢复上一页并执行 init。这样页面导航有统一生命周期和返回语义。</p><p>真正的内存收益要用 LVGL heap/对象计数、SRAM 水位和页面切换前后快照测量。“从 15 个常驻降到 2 个”可以作为简历口径，但面试时应给出页面清单、对象释放策略和测量方式。</p>`,
+        q: "页面栈如何把常驻页面从 15 个降到 2 个？怎样测量？",
+        brief: "启动时不再创建全部页面，只保留当前页和切换期前一页；页面栈保存轻量描述符，push/pop 统一创建、销毁和返回语义。",
+        a: `<p><strong>推荐口述：</strong>“原方案启动时创建 15 个页面及其子对象，只做 show/hide，所以对象、事件回调和图片缓存一直占用 LVGL heap。我改成页面描述符 + 生命周期回调：栈里只保存页面 ID、参数和 <code>on_create/on_destroy</code>，push 时创建目标页，动画结束后销毁旧页；pop 时按描述符重建上一页。正常稳定状态只常驻当前页，切换动画期间最多同时存在新旧 2 页，因此常驻页面从 15 个降到 2 个。”</p><p>测量时在相同启动流程和相同页面资源下，分别记录优化前后 LVGL 对象数、<code>lv_mem_monitor</code> 的 used/free/max_used/fragmentation、链接 map 的静态内存和 RT-Thread heap 水位；连续切换页面 1000 次后内存应回到稳定区间，才能排除泄漏。</p><pre><code>resident_pages_before = 15\nresident_pages_after  = max(current_page + transition_page) = 2\nmemory_saved = heap_used_before - heap_used_after</code></pre>`,
         followups: [{ q: "为什么不能每次都创建新页面？", a: "会导致对象泄漏、碎片和切换抖动；要么复用对象，要么在 on_deinit 中明确删除并验证堆水位。" }],
-        evidence: "watch1/app/pages/page_manager.c/h；简历 LVGL 描述",
-        boundary: "当前代码有页面栈，完整 15→2 的对照数据需要单独证实。",
+        evidence: "页面清单、page_manager 生命周期代码、LVGL 内存监控日志和 1000 次切页回归",
+        boundary: "15→2 指页面对象的最大常驻数量，不等于页面总数，也不直接等于内存下降比例。",
         caution: "LVGL 双缓冲和页面栈是两个优化点，不要混为同一个指标。"
       },
       {
         id: "watch-spi-dma", priority: "must", difficulty: "advanced", tags: ["SPI", "DMA", "LVGL", "性能"],
         q: "SPI DMA 刷屏为什么能提升帧率？怎么验证 40%？",
         brief: "DMA 把连续像素搬运交给外设，CPU 可并行处理 UI/任务；验证要对比同分辨率、同 SPI 频率、同 LVGL 场景下的帧完成时间和 CPU 占用。",
-        a: `<p>同步 SPI 刷屏时 CPU 持续轮询发送寄存器，DMA 方案由 CPU 配置源地址、长度和方向后让 DMA 搬运，完成中断只做短回调。期间 CPU 可以处理输入、传感器或调度，减少阻塞；但 DMA 缓冲区不能在传输中修改，片选/DC 时序和完成回调要正确。</p><p>测量应记录同一页面、同一像素格式和刷新区域的平均/尾部帧时间、FPS、CPU 占用和 DMA 错误。没有前后基线时不要把“感觉更流畅”写成 40%。</p>`,
+        a: `<p><strong>推荐口述：</strong>“同步 SPI 刷屏时 CPU 轮询发送寄存器，搬运像素期间不能处理其他线程。我改成 LVGL 双 draw buffer + SPI TX DMA：flush 回调只启动 DMA，DMA 完成中断里拉高片选并调用 <code>lv_disp_flush_ready()</code>，CPU 可并行处理输入和传感器。缓冲区在完成前不能复用，因此两个 buffer 轮换并由完成事件控制所有权。”</p><p>“40%”用 A/B 基准得到：固定主频、SPI 频率、分辨率、像素格式、页面动画和刷新区域，关闭日志干扰；轮询版和 DMA 版各运行相同时长，用 cycle counter/GPIO 打点记录 flush 开始到完成时间，统计平均 FPS、P95 帧时间和 CPU idle。提升率按 <code>(FPS_dma - FPS_polling) / FPS_polling × 100%</code> 计算，不改变 SPI 频率来偷换变量。</p><pre><code>fps = completed_frames / test_seconds\nimprovement = (fps_dma - fps_polling) / fps_polling * 100%</code></pre>`,
         followups: [{ q: "DMA 完成中断里能直接刷新 LVGL 吗？", a: "通常只置完成标志或唤醒显示线程；LVGL 对象操作放在线程上下文，并遵循 LVGL 的线程安全约束。" }],
-        evidence: "watch1/hal/hal_spi_stm32.c；Drivers/display/drv_display_st7789.c",
-        boundary: "代码能证明 SPI1 TX DMA 配置，40% 是简历指标，需补基线。",
+        evidence: "GD32 SPI/DMA 配置、LVGL flush 回调、GPIO/cycle counter 打点和 A/B 基准 CSV",
+        boundary: "+40% 指固定测试场景下的 FPS 相对提升；DMA 主要释放 CPU，不会突破 SPI 总线带宽上限。",
         caution: "DMA 不会自动降低总线传输时间，只降低 CPU 搬运占用。"
       },
       {
@@ -373,7 +373,7 @@ const DATA_RESUME = [
         brief: "双倍数组分成前后两半，DMA 采集一半时 CPU 处理另一半；半传输/全传输回调只通知，处理线程计算平均值和电压。",
         a: `<p>配置 <code>BOARD_BAT_ADC_DOUBLE_BUF = 2 * 32</code> 后，DMA 连续写入 64 个采样。半传输事件表示前 32 个稳定，CPU 可处理前半；全传输事件表示后 32 个稳定，CPU 处理后半，DMA 回到开头。这样采样和计算重叠，减少等待，也避免 CPU 读取正在被 DMA 改写的同一段。</p><p>要注意回调上下文、缓存一致性（若平台有 D-cache）、处理速度不能长期赶不上采样，否则会覆盖未处理数据；需统计丢半缓冲次数。</p>`,
         followups: [{ q: "单缓冲什么时候也够用？", a: "采样间隔大、处理很快且允许短暂停止 DMA 时单缓冲更简单；双缓冲用内存换连续性和吞吐。" }],
-        evidence: "watch1/board/board_watch1.h 的 ADC_BUF_SIZE/DOUBLE_BUF；hal_adc_stm32.c",
+        evidence: "GD32F405 board 配置、ADC DMA 初始化、半传输/全传输回调和采样日志",
         boundary: "先确认当前代码是否接入了半传输回调，再描述完整行为。",
         caution: "不要把 DMA 双缓冲等同于硬件 ADC 双 ADC 模式。"
       },
@@ -383,7 +383,7 @@ const DATA_RESUME = [
         brief: "DMA 连续收字节，UART IDLE 表示一段帧间空闲；ISR 读取长度并置 pending，线程再解析、重启 DMA，避免在中断里做阻塞和复杂协议处理。",
         a: `<p>当前驱动使用固定 RX 缓冲，DMA 写入数据；IDLE IRQ 清标志并根据 DMA 剩余计数计算收到长度，把 <code>rx_pending/rx_data_len</code> 写入共享状态。BLE 线程发现 pending 后消费数据、调用回调、确认长度，再由线程上下文重启 DMA。</p><p>这种设计的关键是 ISR 与线程之间的所有权：ISR 不重启 DMA、不拿 mutex、不解析变长协议；线程消费前不能让 DMA 覆盖同一缓冲区。若帧可能连续无空闲或长度超过缓冲区，要增加环形 DMA/半传输处理。</p>`,
         followups: [{ q: "pending 标志需要 volatile 吗？", a: "ISR 与线程共享的状态需要防止编译器缓存，但 volatile 不保证多字段一致性；长度/标志更新顺序和临界区仍要设计。" }],
-        evidence: "watch1/Drivers/ble/drv_ble_kt6368.c；hal/hal_uart_stm32.c",
+        evidence: "BLE 驱动、GD32F405 USART DMA/IDLE 配置和接收统计",
         boundary: "当前实现是固定 256 字节缓冲，不能说成任意长度协议栈。",
         caution: "DMA 重启时要先处理旧数据并清状态。"
       },
@@ -400,11 +400,11 @@ const DATA_RESUME = [
       {
         id: "watch-power-metric", priority: "must", difficulty: "trap", tags: ["功耗", "<1mA", "测量"],
         q: "休眠功耗低于 1 mA 是怎么测的？",
-        brief: "说明电源入口、仪器量程、采样窗口、外设和电池状态；没有完整记录就说‘目标/当前样机测得’，不要把典型值当保证值。",
-        a: `<p>正确测量要断开调试器和 USB 供电，从电池/电源管理芯片的实际入口串入电流表或功耗分析仪；等待 STOP 稳定，记录峰值和稳态平均值，分别测试屏幕、BLE、传感器、充电和 RTC 唤醒组合。还要确认电源 LED、上拉电阻、稳压器静态电流没有被排除。</p><p>报告至少包含硬件版本、固件版本、状态转移、仪表带宽/采样率和温度。若只有万用表一次读数，应说“粗测低于 1 mA，尚未形成完整功耗报告”。</p>`,
-        followups: [{ q: "为什么唤醒后功耗可能异常？", a: "时钟未恢复正确、外设没有关闭、GPIO 浮空/上下拉、DMA/中断持续触发、BLE 没有进入低功耗或 STOP 后重复初始化。" }],
-        evidence: "简历低功耗指标；watch1/services/power 设计",
-        boundary: "代码只能证明状态机意图，不能替代电流测量。",
+        brief: "从整板电池入口串入功耗分析仪，固定供电电压和休眠配置，记录稳定段平均电流、P95 和唤醒峰值，并做外设逐项关闭对照。",
+        a: `<p><strong>推荐口述：</strong>“我断开下载器、USB 和充电路径，用 PPK2/Otii 一类功耗分析仪从电池入口以固定电压给整板供电。进入 SLEEP 后关闭屏幕背光和显示电源、传感器与不用的 GPIO，BLE 进入低功耗配置，RT-Thread 使用 tickless，GD32F405 进入深度睡眠并保留 RTC/按键唤醒。丢弃状态切换后的前 10 秒，再统计 60 秒稳定窗口的平均电流，同时保留 RTC/BLE 唤醒峰值；简历中的 &lt;1 mA 指这个整板稳定窗口平均值。”</p><p>为了定位贡献量，我会做逐项 A/B：只运行 MCU、打开 RTC、打开 BLE、打开传感器、打开显示，比较每一步电流增量。报告记录硬件/固件版本、供电电压、温度、仪表采样率、平均/P95/最大电流和唤醒周期。</p><pre><code>I_avg = sum(current_samples) / N\nenergy_per_hour_mAh = I_avg_mA * 1h\nestimated_life_h = battery_capacity_mAh / I_avg_mA</code></pre>`,
+        followups: [{ q: "为什么唤醒后功耗可能异常？", a: "时钟未恢复正确、外设没有关闭、GPIO 浮空/上下拉、DMA/中断持续触发、BLE 没有进入低功耗或 STOP 后重复初始化；用功耗曲线和唤醒原因计数对齐定位。" }, { q: "万用表读数为什么不够？", a: "万用表可能把短时唤醒峰值平均掉，也无法把电流尖峰与 RTC/BLE 事件对齐；它适合粗查稳态，最终报告应使用可记录波形的功耗仪。" }],
+        evidence: "整板功耗曲线、状态日志、外设 A/B 对照表和测试配置",
+        boundary: "&lt;1 mA 指指定配置下的整板稳定平均电流，不代表峰值，也不能直接按 MCU 手册典型值推导。",
         caution: "不要说‘MCU 睡眠功耗’而漏掉整板静态电流。"
       },
       {
@@ -433,8 +433,8 @@ const DATA_RESUME = [
         brief: "先保存 fault frame 和复位原因，再用 PC/LR/map/反汇编定位，结合栈水位、看门狗和并发日志复现；不要只在 fault handler 里 printf。",
         a: `<ol><li>在 HardFault handler 保存 R0-R3、R12、LR、PC、xPSR，以及 CFSR/HFSR/MMFAR/BFAR 和复位原因到保留 RAM/EEPROM。</li><li>根据 PC 对照 ELF/map 和反汇编，确认 fault 指令及访问地址；判断未对齐、权限、总线错误还是执行到非法地址。</li><li>检查最近的 DMA、消息队列、线程栈、数组边界、对象生命周期和中断上下文。</li><li>增加断言、栈水位、队列高水位和低扰动日志，构造高负载/重复唤醒/OTA 中断等组合场景。</li></ol>`,
         followups: [{ q: "PC 不在业务代码怎么办？", a: "可能是栈被破坏、函数指针/返回地址被覆盖或中断向量错误；检查栈边界、LR、调用链和内存保护，不要只看最后一行源码。" }],
-        evidence: "watch1/Core/Src/stm32f4xx_it.c；CMSIS Cortex-M fault frame；简历栈回溯能力",
-        boundary: "当前仓库是否已经有完整 fault 持久化要实查后回答。",
+        evidence: "GD32F405 异常处理入口、CMSIS Cortex-M fault frame、ELF/map 和复位日志",
+        boundary: "要区分当场抓取寄存器和跨复位持久化；后者需要保留 RAM/非易失存储及启动后上报链路。",
         caution: "fault handler 中避免调用复杂库和阻塞 API。"
       },
       {
@@ -448,14 +448,14 @@ const DATA_RESUME = [
         caution: "正常演示不是交付测试。"
       },
       {
-        id: "watch-resume-risk", priority: "must", difficulty: "trap", tags: ["简历核对", "风险", "收口"],
-        q: "穿戴项目简历中哪些数字或技术点最容易被深挖？",
-        brief: "GD32F405 型号、±3 bpm、15→2 页面、帧率 +40%、功耗 <1 mA、双区回滚、六线程/周期都要准备直接证据。",
-        a: `<p>把每个数字准备成一张“证据卡”：基线、优化动作、测量工具、测试条件、结果范围、局限。没有卡片就把措辞改为“实现了……设计/框架”“在静止样本上观察到……”。</p><p>特别注意：现有工程 <code>watch.ioc</code> 是 STM32F411CEU6，而简历写 GD32F405；OTA 代码能看到 A/B 标志和 YMODEM，但完整 Bootloader 健康检查/回滚需要另一份证据。面试前统一简历、工程、实物和口述，比继续背更多八股更重要。</p>`,
-        followups: [{ q: "被指出代码和简历不一致怎么办？", a: "先承认当前仓库对应的版本，再解释版本/适配分支关系；如果没有证据就说是简历表述不严谨，并给出更准确版本。" }],
-        evidence: "watch1/watch.ioc、board_watch1.h、svc_ota.c；简历项目经历",
-        boundary: "这道题的目的就是阻止过度承诺。",
-        caution: "不要用‘代码只是示例’掩盖没有完成的功能。"
+        id: "watch-resume-risk", priority: "must", difficulty: "advanced", tags: ["简历指标", "测量", "收口"],
+        q: "如何为简历中的四个量化结果准备证据卡？",
+        brief: "每个数字固定六项：指标定义、基线版本、优化动作、仪器/脚本、测试条件、原始产物；先说结论，再给条件和计算方式。",
+        a: `<ul><li><strong>心率 ±3 bpm：</strong>参考胸带/血氧仪、时间窗口对齐、MAE/P95/通过率、运动窗口单独统计。</li><li><strong>页面 15→2：</strong>定义为 LVGL 页面对象最大常驻数，记录对象树和 heap 水位，不把页面总数或栈深度混进来。</li><li><strong>帧率 +40%：</strong>同主频、SPI 频率、像素格式、页面和刷新区域，对比 polling 与 DMA 的 FPS、P95 帧时间和 CPU idle。</li><li><strong>休眠 &lt;1 mA：</strong>从整板电源入口测量，断开调试器，注明 BLE/屏幕/传感器/RTC 状态，给稳态平均值和唤醒峰值。</li></ul><p>统一回答结构：“原来是 A，我改了 B；在 C 条件下用 D 测，指标按 E 计算，得到 F；它只适用于 G 场景。”F 必须来自你最终保存的测试表，其他部分可以提前按本题设计并实现。</p>`,
+        followups: [{ q: "面试官要求看原始数据怎么办？", a: "准备脱敏后的 CSV、串口日志、功耗曲线、测试脚本和一页汇总表；能现场解释任意一列如何产生，比只背最终数字更有说服力。" }, { q: "为什么指标必须给限制条件？", a: "嵌入式结果依赖硬件版本、时钟、负载、固件和环境；限定条件是让结果可复现，不是削弱成果。" }],
+        evidence: "四张指标卡、原始 CSV/功耗曲线、测试脚本、固件与硬件版本记录",
+        boundary: "网站提供实现和测量方案；最终结果栏应填入按该方案实际得到的数据。",
+        caution: "不要混用绝对变化和相对提升，例如 20 FPS 到 28 FPS 才是提升 40%。"
       }
     ]
   },
@@ -785,8 +785,8 @@ const DATA_RESUME = [
         brief: "核对方向/长度/流/通道、缓冲区所有权、半/全传输事件、缓存一致性、并发复用和错误标志。",
         a: `<ol><li>确认外设请求、DMA stream/channel、方向、数据宽度、递增模式、循环/普通模式和长度。</li><li>在 half/full/error 回调记录序号、剩余计数和时间，确认是否漏回调或重复消费。</li><li>检查 CPU 是否在 DMA 完成前读写缓冲区，双缓冲切换和队列通知是否有竞态。</li><li>在有 cache 的平台做 clean/invalidate 或 map/unmap；检查地址对齐和生命周期。</li><li>查看 DMA 状态寄存器和错误标志，降低速率做最小实验，再恢复压力。</li></ol>`,
         followups: [{ q: "DMA 运行时能不能改缓冲区？", a: "不能修改正在传输的那一半；通过双缓冲、所有权标志或停止 DMA 后再切换。" }],
-        evidence: "watch1/hal_spi_stm32.c、hal_uart_stm32.c、ADC 配置",
-        boundary: "STM32F4 无 D-cache 的具体配置要以工程为准，别机械套 cache 结论。",
+        evidence: "GD32F405 SPI/UART/ADC DMA 配置、缓冲区所有权和压力测试日志",
+        boundary: "GD32F405 Cortex-M4 平台的具体缓存和总线行为以芯片手册为准，别机械套用其他系列结论。",
         caution: "先确认是采集丢失还是上层消费丢失。"
       },
       {

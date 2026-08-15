@@ -337,9 +337,9 @@
     const todayCount = (activity[todayKey()] || []).length;
     const resumeQuestions = questions.filter((question) => RESUME_CATEGORY_IDS.has(question.categoryId));
     const riskItems = [
-      { id: "resume-mcu-conflict", title: "MCU 型号口径冲突", copy: "简历写 GD32F405，现有工程直接证据为 STM32F411。" },
-      { id: "watch-ota-rollback", title: "OTA 回滚证据不完整", copy: "有双区和标志位，但完整健康确认/回滚链需补证据。" },
-      { id: "can-dropped-zero", title: "量化结果必须带条件", copy: "±3 bpm、+40%、<1 mA、零丢包都要能说明测量方法。" }
+      { id: "watch-intro", title: "GD32F405 平台主线", copy: "从启动、时钟、外设、RT-Thread 到 LVGL，先把系统边界讲完整。" },
+      { id: "watch-ota-rollback", title: "OTA 升级闭环", copy: "接收、校验、写入、试运行、健康确认和失败回滚必须能画出状态机。" },
+      { id: "watch-resume-risk", title: "量化指标证据卡", copy: "±3 bpm、15→2、+40%、<1 mA 都要绑定基线、工具、条件和公式。" }
     ];
     const queue = [...resumeQuestions, ...questions.filter((q) => !RESUME_CATEGORY_IDS.has(q.categoryId))]
       .filter((question) => getStatus(question.id) !== "mastered")
@@ -347,11 +347,11 @@
       .slice(0, 7);
 
     main.innerHTML = `
-      ${pageHeading("TODAY", "今天先守住简历，再补基础", "按项目证据和掌握度安排复习。先口述，再看答案，最后沿追问链自测。", zhDate())}
+      ${pageHeading("TODAY", "今天先讲透简历，再补基础", "按项目主线和掌握度安排复习。先口述，再看实现，最后沿追问链自测。", zhDate())}
       <section class="overview-band">
         <div class="overview-copy">
           <span class="eyebrow">距 9 月 1 日 ${autumnCountdown()} 天</span>
-          <h2>${todayCount >= 20 ? "今日目标已完成，继续巩固薄弱题。" : `今天完成 ${Math.max(0, 20 - todayCount)} 道口述，优先处理简历红线。`}</h2>
+          <h2>${todayCount >= 20 ? "今日目标已完成，继续巩固薄弱题。" : `今天完成 ${Math.max(0, 20 - todayCount)} 道口述，优先讲透简历项目。`}</h2>
           <p>每道题先用 30 秒给结论；能回答“为什么、怎么验证、哪里有限制”，才算真正掌握。</p>
           <div class="overview-actions">
             <button class="primary-btn" data-route="flashcard">${icon("play")}开始闪卡</button>
@@ -367,9 +367,9 @@
       </section>
 
       <section class="section">
-        <div class="section-header"><div><h2>面试前必须统一的口径</h2><p>这些不是知识盲点，而是会影响整份简历可信度的证据问题。</p></div></div>
+        <div class="section-header"><div><h2>简历项目主线</h2><p>先按简历口径讲清架构，再用实现路径、测试方法和边界回答追问。</p></div></div>
         <div class="risk-strip">
-          ${riskItems.map((item) => `<button class="risk-item" data-question="${item.id}"><span class="risk-level">HIGH RISK</span><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.copy)}</p></button>`).join("")}
+          ${riskItems.map((item) => `<button class="risk-item" data-question="${item.id}"><span class="risk-level">FOCUS</span><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.copy)}</p></button>`).join("")}
         </div>
       </section>
 
@@ -381,7 +381,7 @@
         <aside>
           <div class="section-header"><div><h2>简历准备度</h2><p>只统计“已掌握”。</p></div></div>
           <div class="roadmap">
-            <h3>五条防守链</h3>
+            <h3>五条项目主线</h3>
             ${resumeCategories.map((category) => {
               const item = categoryStats(category);
               return `<div class="roadmap-row"><div class="roadmap-copy"><span>${escapeHtml(category.name)}</span><span>${item.mastered}/${item.total}</span></div><div class="mini-track"><span style="width:${item.percent}%"></span></div></div>`;
@@ -420,9 +420,9 @@
 
   function renderLibrary() {
     main.innerHTML = `
-      ${pageHeading("KNOWLEDGE BASE", "全部题库", "先按简历防守建立可信回答，再用基础题补足原理和手写能力。", `${questions.length} 道题`)}
+      ${pageHeading("KNOWLEDGE BASE", "全部题库", "先围绕简历项目掌握实现与验证，再用基础题补足原理和手写能力。", `${questions.length} 道题`)}
       <section class="section">
-        <div class="section-header"><div><h2>简历与项目</h2><p>回答、深挖、证据和风险口径。</p></div></div>
+        <div class="section-header"><div><h2>简历与项目</h2><p>口述回答、实现方案、深挖问题和验证方法。</p></div></div>
         <div class="category-grid">${resumeCategories.map(categoryTile).join("")}</div>
       </section>
       <section class="section">
