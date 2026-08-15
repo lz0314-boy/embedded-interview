@@ -72,8 +72,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/v1/chat", dependencies=[Depends(authorize)])
     def chat(request: ChatRequest) -> StreamingResponse:
         hits = index.search(request.message, settings.retrieval_limit)
+        effective_settings = settings
+        if settings.local_only:
+            updates = {}
+            if request.provider_base_url:
+                updates["openai_base_url"] = request.provider_base_url
+            if request.provider_model:
+                updates["openai_model"] = request.provider_model
+            if request.provider_api_mode:
+                updates["openai_api_mode"] = request.provider_api_mode
+            if updates:
+                effective_settings = settings.model_copy(update=updates)
         return StreamingResponse(
-            stream_chat(settings, request, hits),
+            stream_chat(effective_settings, request, hits),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache, no-transform",

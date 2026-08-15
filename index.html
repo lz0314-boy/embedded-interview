@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f7f8">
   <title>嵌入式面试作战台</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/style.css?v=13">
+  <link rel="stylesheet" href="css/style.css?v=14">
   <script src="js/lucide.min.js?v=0.468.0" defer></script>
   <script src="js/data.js?v=12" defer></script>
   <script src="js/data_resume.js?v=19" defer></script>
@@ -15,7 +15,7 @@
   <script src="js/data_linux_lab.js?v=12" defer></script>
   <script src="js/data_supplement.js?v=12" defer></script>
   <script src="js/app.js?v=12" defer></script>
-  <script src="js/ai-assistant.js?v=1" defer></script>
+  <script src="js/ai-assistant.js?v=2" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -111,6 +111,21 @@
       </div>
       <label for="aiBackendUrl">后端地址</label>
       <input id="aiBackendUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-service.example.com">
+      <label for="aiProviderBaseUrl">API 请求地址</label>
+      <input id="aiProviderBaseUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://api.example.com/v1">
+      <div class="ai-provider-row">
+        <div>
+          <label for="aiProviderModel">模型</label>
+          <input id="aiProviderModel" type="text" autocomplete="off" placeholder="服务商提供的模型名">
+        </div>
+        <div>
+          <label for="aiProviderMode">接口协议</label>
+          <select id="aiProviderMode">
+            <option value="chat_completions">Chat Completions</option>
+            <option value="responses">Responses</option>
+          </select>
+        </div>
+      </div>
       <label for="aiAccessToken">访问令牌</label>
       <div class="ai-token-field">
       <input id="aiAccessToken" type="password" autocomplete="current-password" placeholder="本地模式可留空，公网模式必填">

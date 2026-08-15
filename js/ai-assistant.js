@@ -19,6 +19,9 @@
     settingsClose: document.querySelector("#aiSettingsCloseBtn"),
     settings: document.querySelector("#aiSettings"),
     backendUrl: document.querySelector("#aiBackendUrl"),
+    providerBaseUrl: document.querySelector("#aiProviderBaseUrl"),
+    providerModel: document.querySelector("#aiProviderModel"),
+    providerMode: document.querySelector("#aiProviderMode"),
     accessToken: document.querySelector("#aiAccessToken"),
     tokenToggle: document.querySelector("#aiTokenToggle"),
     test: document.querySelector("#aiTestBtn"),
@@ -38,8 +41,18 @@
   const defaultBackendUrl = ["localhost", "127.0.0.1"].includes(location.hostname)
     ? "http://127.0.0.1:8787"
     : "";
-  let config = readStorage("config", { backendUrl: defaultBackendUrl, accessToken: "" });
-  if (!config || typeof config !== "object") config = { backendUrl: defaultBackendUrl, accessToken: "" };
+  const defaultConfig = {
+    backendUrl: defaultBackendUrl,
+    accessToken: "",
+    providerBaseUrl: "",
+    providerModel: "gpt-5-mini",
+    providerApiMode: "chat_completions"
+  };
+  const savedConfig = readStorage("config", defaultConfig);
+  let config = {
+    ...defaultConfig,
+    ...(savedConfig && typeof savedConfig === "object" ? savedConfig : {})
+  };
   let history = readStorage("history", []);
   if (!Array.isArray(history)) history = [];
   let mode = readStorage("mode", "answer");
@@ -91,6 +104,9 @@
     elements.settings.hidden = !shouldOpen;
     if (shouldOpen) {
       elements.backendUrl.value = config.backendUrl;
+      elements.providerBaseUrl.value = config.providerBaseUrl;
+      elements.providerModel.value = config.providerModel;
+      elements.providerMode.value = config.providerApiMode;
       elements.accessToken.value = config.accessToken;
       elements.settingsStatus.textContent = "";
       window.setTimeout(() => elements.backendUrl.focus(), 50);
@@ -133,6 +149,21 @@
     return token;
   }
 
+  function normalizeProviderBaseUrl(value) {
+    const trimmed = String(value || "").trim().replace(/\/+$/, "");
+    if (!trimmed) return "";
+    let url;
+    try {
+      url = new URL(trimmed);
+    } catch (_) {
+      throw new Error("API 请求地址格式不正确");
+    }
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new Error("API 请求地址必须使用 HTTP 或 HTTPS");
+    }
+    return url.toString().replace(/\/$/, "");
+  }
+
   async function checkHealth(showResult = true) {
     if (!config.backendUrl) {
       setConnection("offline", "未配置");
@@ -168,8 +199,12 @@
         backendUrl,
         accessToken: localMode && !elements.accessToken.value.trim()
           ? ""
-          : normalizeAccessToken(elements.accessToken.value)
+          : normalizeAccessToken(elements.accessToken.value),
+        providerBaseUrl: normalizeProviderBaseUrl(elements.providerBaseUrl.value),
+        providerModel: elements.providerModel.value.trim(),
+        providerApiMode: elements.providerMode.value
       };
+      if (!config.providerModel) throw new Error("请填写中转服务支持的模型名");
       writeStorage("config", config);
       elements.settingsStatus.textContent = localMode ? "已保存 · 本地模式无需访问令牌" : "已保存";
       checkHealth(true);
@@ -423,7 +458,14 @@
       const response = await fetch(`${config.backendUrl}/v1/chat`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message, history: priorHistory, mode }),
+        body: JSON.stringify({
+          message,
+          history: priorHistory,
+          mode,
+          provider_base_url: config.providerBaseUrl || null,
+          provider_model: config.providerModel || null,
+          provider_api_mode: config.providerApiMode
+        }),
         signal: controller.signal
       });
       if (!response.ok) {
@@ -506,6 +548,9 @@
   });
 
   elements.backendUrl.value = config.backendUrl;
+  elements.providerBaseUrl.value = config.providerBaseUrl;
+  elements.providerModel.value = config.providerModel;
+  elements.providerMode.value = config.providerApiMode;
   elements.accessToken.value = config.accessToken;
   setMode(mode);
   renderMessages();

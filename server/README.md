@@ -1,6 +1,6 @@
 # Embedded Interview AI Backend
 
-该服务为 GitHub Pages 上的个人面试助手提供鉴权、知识检索和 OpenAI Responses API 流式回答。API Key、访问令牌和私有资料只放在后端，不能写入前端或提交到 GitHub。
+该服务为个人面试助手提供鉴权、知识检索和 OpenAI-compatible 流式回答。API Key、访问令牌和私有资料只放在后端，不能写入前端或提交到 GitHub。
 
 ## 本地运行
 
@@ -11,6 +11,8 @@ powershell -ExecutionPolicy Bypass -File .\run-local-assistant.ps1
 ```
 
 首次运行会自动创建 `server/.env`、启用 `LOCAL_ONLY=true` 并打开配置文件。填写 `OPENAI_API_KEY` 后再次运行即可。电脑本地模式不要求在网页中填写访问令牌；之后脚本会启动前端和后端并自动打开浏览器，不需要重复配置。
+
+如果使用中转或自定义 API，在网页 AI 助手设置中填写 API 请求地址、服务商模型名和协议。最常见的中转服务选择 `Chat Completions`，请求地址通常是服务商文档给出的 `/v1` 地址，例如 `https://provider.example.com/v1`。只有明确支持 Responses API 的服务才选择 `Responses`。
 
 停止本地服务：
 
@@ -23,7 +25,7 @@ cd server
 python -m pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(32))"
-# 将输出写入 .env 的 ASSISTANT_ACCESS_TOKEN，并填写 OPENAI_API_KEY
+# 本地模式下 LOCAL_ONLY=true 时不需要填写 ASSISTANT_ACCESS_TOKEN
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8787 --reload
 ```
 

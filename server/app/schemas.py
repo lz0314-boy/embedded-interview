@@ -20,6 +20,9 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     history: list[ChatMessage] = Field(default_factory=list, max_length=12)
     mode: Literal["answer", "mock", "review"] = "answer"
+    provider_base_url: str | None = Field(default=None, max_length=500)
+    provider_model: str | None = Field(default=None, max_length=200)
+    provider_api_mode: Literal["responses", "chat_completions"] | None = None
 
     @field_validator("message")
     @classmethod

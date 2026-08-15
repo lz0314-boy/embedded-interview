@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-5-mini", validation_alias="OPENAI_MODEL")
+    openai_base_url: str | None = Field(default=None, validation_alias="OPENAI_BASE_URL")
+    openai_api_mode: str = Field(default="responses", validation_alias="OPENAI_API_MODE")
     assistant_access_token: SecretStr | None = Field(
         default=None, validation_alias="ASSISTANT_ACCESS_TOKEN"
     )
