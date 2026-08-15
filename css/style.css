@@ -524,6 +524,7 @@ mark { padding: 0 2px; background: var(--warning-soft); color: inherit; }
   width: min(var(--ai-drawer-width, 440px), calc(100vw - 20px));
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   overflow: hidden;
+  overflow: clip;
   border-left: 1px solid var(--border);
   background: var(--surface);
   box-shadow: -16px 0 40px rgba(11, 18, 15, 0.16);

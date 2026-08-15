@@ -124,6 +124,18 @@
     }
   }
 
+  function focusInsideDrawer(element) {
+    elements.drawer.scrollTop = 0;
+    try {
+      element.focus({ preventScroll: true });
+    } catch (_) {
+      element.focus();
+    }
+    window.requestAnimationFrame(() => {
+      elements.drawer.scrollTop = 0;
+    });
+  }
+
   function setConnection(status, text) {
     elements.connectionText.textContent = text;
     elements.statusDot.dataset.status = status;
@@ -132,7 +144,8 @@
   function openDrawer() {
     document.body.classList.add("ai-open");
     elements.drawer.setAttribute("aria-hidden", "false");
-    window.setTimeout(() => elements.input.focus(), 180);
+    elements.drawer.scrollTop = 0;
+    window.setTimeout(() => focusInsideDrawer(elements.input), 180);
     if (config.backendUrl) checkHealth(false);
     else toggleSettings(true);
   }
@@ -154,7 +167,7 @@
       elements.providerMode.value = config.providerApiMode;
       elements.accessToken.value = config.accessToken;
       elements.settingsStatus.textContent = "";
-      window.setTimeout(() => elements.backendUrl.focus(), 50);
+      window.setTimeout(() => focusInsideDrawer(elements.backendUrl), 50);
     }
   }
 
@@ -536,7 +549,7 @@
       setStreaming(false);
       persistHistory();
       renderMessages();
-      elements.input.focus();
+      focusInsideDrawer(elements.input);
     }
   }
 
