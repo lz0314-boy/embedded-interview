@@ -11,6 +11,7 @@
 
   const elements = {
     drawer: document.querySelector("#aiDrawer"),
+    resizeHandle: document.querySelector("#aiResizeHandle"),
     scrim: document.querySelector("#aiScrim"),
     launch: document.querySelector("#aiLaunchBtn"),
     close: document.querySelector("#aiCloseBtn"),
@@ -59,6 +60,11 @@
   if (!MODES[mode]) mode = "answer";
   let controller = null;
   let streamingMessage = null;
+  let resizeState = null;
+
+  const DRAWER_WIDTH_KEY = "drawerWidth";
+  const MIN_DRAWER_WIDTH = 360;
+  const MAX_DRAWER_WIDTH = 720;
 
   function readStorage(key, fallback) {
     try {
@@ -73,6 +79,42 @@
     try {
       localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
     } catch (_) {}
+  }
+
+  function clampDrawerWidth(value) {
+    const viewportLimit = Math.max(MIN_DRAWER_WIDTH, Math.floor(window.innerWidth * 0.85));
+    return Math.round(Math.min(MAX_DRAWER_WIDTH, viewportLimit, Math.max(MIN_DRAWER_WIDTH, value)));
+  }
+
+  function applyDrawerWidth(value, persist = false) {
+    const width = clampDrawerWidth(Number(value) || 440);
+    elements.drawer.style.setProperty("--ai-drawer-width", `${width}px`);
+    if (persist) writeStorage(DRAWER_WIDTH_KEY, width);
+  }
+
+  function startDrawerResize(event) {
+    if (window.innerWidth <= 820) return;
+    event.preventDefault();
+    resizeState = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: elements.drawer.getBoundingClientRect().width
+    };
+    elements.resizeHandle.setPointerCapture?.(event.pointerId);
+    document.body.classList.add("ai-resizing");
+  }
+
+  function moveDrawerResize(event) {
+    if (!resizeState || event.pointerId !== resizeState.pointerId) return;
+    applyDrawerWidth(resizeState.startWidth - (event.clientX - resizeState.startX));
+  }
+
+  function finishDrawerResize(event) {
+    if (!resizeState || (event && event.pointerId !== resizeState.pointerId)) return;
+    const width = elements.drawer.getBoundingClientRect().width;
+    applyDrawerWidth(width, true);
+    resizeState = null;
+    document.body.classList.remove("ai-resizing");
   }
 
   function refreshIcons(root = document) {
@@ -530,6 +572,10 @@
     renderMessages();
   });
   elements.send.addEventListener("click", sendMessage);
+  elements.resizeHandle.addEventListener("pointerdown", startDrawerResize);
+  elements.resizeHandle.addEventListener("pointermove", moveDrawerResize);
+  elements.resizeHandle.addEventListener("pointerup", finishDrawerResize);
+  elements.resizeHandle.addEventListener("pointercancel", finishDrawerResize);
   elements.input.addEventListener("input", updateComposer);
   elements.input.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -551,6 +597,7 @@
   elements.providerBaseUrl.value = config.providerBaseUrl;
   elements.providerModel.value = config.providerModel;
   elements.providerMode.value = config.providerApiMode;
+  applyDrawerWidth(readStorage(DRAWER_WIDTH_KEY, 440));
   elements.accessToken.value = config.accessToken;
   setMode(mode);
   renderMessages();
