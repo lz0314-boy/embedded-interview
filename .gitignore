@@ -1,0 +1,7 @@
+.env
+server/.env
+server/private_knowledge/*
+!server/private_knowledge/.gitkeep
+server/.pytest_cache/
+server/**/__pycache__/
+*.pyc

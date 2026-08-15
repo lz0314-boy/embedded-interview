@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f7f8">
   <title>嵌入式面试作战台</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
   <script src="js/lucide.min.js?v=0.468.0" defer></script>
   <script src="js/data.js?v=12" defer></script>
   <script src="js/data_resume.js?v=19" defer></script>
@@ -15,6 +15,7 @@
   <script src="js/data_linux_lab.js?v=12" defer></script>
   <script src="js/data_supplement.js?v=12" defer></script>
   <script src="js/app.js?v=12" defer></script>
+  <script src="js/ai-assistant.js?v=1" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -70,6 +71,10 @@
           <button class="icon-btn search-clear" id="searchClear" aria-label="清除搜索" title="清除搜索"><i data-lucide="x"></i></button>
         </div>
         <div class="topbar-actions">
+          <button class="text-btn ai-launch-btn" id="aiLaunchBtn" aria-label="打开 AI 面试助手" title="打开 AI 面试助手">
+            <i data-lucide="sparkles"></i><span>AI 助手</span>
+            <span class="ai-status-dot" id="aiStatusDot" aria-hidden="true"></span>
+          </button>
           <button class="text-btn" id="randomBtn"><i data-lucide="shuffle"></i><span>随机一题</span></button>
           <button class="icon-btn" id="focusBtn" aria-label="进入闪卡训练" title="进入闪卡训练"><i data-lucide="timer-reset"></i></button>
         </div>
@@ -78,6 +83,56 @@
       <main class="main" id="mainContent" tabindex="-1"></main>
     </div>
   </div>
+
+  <div class="ai-scrim" id="aiScrim"></div>
+  <aside class="ai-drawer" id="aiDrawer" aria-label="AI 面试助手" aria-hidden="true">
+    <header class="ai-drawer-header">
+      <div class="ai-title">
+        <span class="ai-avatar"><i data-lucide="bot"></i></span>
+        <div><strong>廖洲 AI</strong><span id="aiConnectionText">未连接</span></div>
+      </div>
+      <div class="ai-header-actions">
+        <button class="icon-btn" id="aiSettingsBtn" aria-label="连接设置" title="连接设置"><i data-lucide="settings-2"></i></button>
+        <button class="icon-btn" id="aiClearBtn" aria-label="清空对话" title="清空对话"><i data-lucide="trash-2"></i></button>
+        <button class="icon-btn" id="aiCloseBtn" aria-label="关闭 AI 助手" title="关闭 AI 助手"><i data-lucide="x"></i></button>
+      </div>
+    </header>
+
+    <div class="ai-mode-tabs" role="tablist" aria-label="对话模式">
+      <button class="active" data-ai-mode="answer" role="tab" aria-selected="true"><i data-lucide="message-circle-question"></i>答疑</button>
+      <button data-ai-mode="mock" role="tab" aria-selected="false"><i data-lucide="messages-square"></i>模拟</button>
+      <button data-ai-mode="review" role="tab" aria-selected="false"><i data-lucide="scan-text"></i>点评</button>
+    </div>
+
+    <section class="ai-settings" id="aiSettings" hidden>
+      <div class="ai-settings-head">
+        <strong>连接设置</strong>
+        <button class="icon-btn" id="aiSettingsCloseBtn" aria-label="关闭设置" title="关闭设置"><i data-lucide="chevron-up"></i></button>
+      </div>
+      <label for="aiBackendUrl">后端地址</label>
+      <input id="aiBackendUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://your-service.example.com">
+      <label for="aiAccessToken">访问令牌</label>
+      <div class="ai-token-field">
+        <input id="aiAccessToken" type="password" autocomplete="current-password" placeholder="个人访问令牌">
+        <button class="icon-btn" id="aiTokenToggle" type="button" aria-label="显示访问令牌" title="显示访问令牌"><i data-lucide="eye"></i></button>
+      </div>
+      <div class="ai-settings-actions">
+        <span id="aiSettingsStatus" role="status"></span>
+        <button class="secondary-btn" id="aiTestBtn" type="button"><i data-lucide="activity"></i>测试</button>
+        <button class="primary-btn" id="aiSaveBtn" type="button"><i data-lucide="save"></i>保存</button>
+      </div>
+    </section>
+
+    <div class="ai-messages" id="aiMessages" aria-live="polite"></div>
+
+    <footer class="ai-composer">
+      <div class="ai-input-wrap">
+        <textarea id="aiInput" rows="1" maxlength="4000" placeholder="输入简历、项目或嵌入式问题"></textarea>
+        <button class="ai-send-btn" id="aiSendBtn" aria-label="发送问题" title="发送问题"><i data-lucide="send"></i></button>
+      </div>
+      <div class="ai-composer-meta"><span id="aiModeHint">答疑模式</span><span id="aiCharCount">0 / 4000</span></div>
+    </footer>
+  </aside>
 
   <div class="toast-region" id="toastRegion" aria-live="polite"></div>
 
