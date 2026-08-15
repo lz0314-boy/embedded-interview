@@ -10,7 +10,7 @@
 powershell -ExecutionPolicy Bypass -File .\run-local-assistant.ps1
 ```
 
-首次运行会自动创建 `server/.env`、生成本地访问令牌并打开配置文件。填写 `OPENAI_API_KEY` 后再次运行即可。之后脚本会启动前端和后端并自动打开浏览器，不需要重复配置令牌。
+首次运行会自动创建 `server/.env`、启用 `LOCAL_ONLY=true` 并打开配置文件。填写 `OPENAI_API_KEY` 后再次运行即可。电脑本地模式不要求在网页中填写访问令牌；之后脚本会启动前端和后端并自动打开浏览器，不需要重复配置。
 
 停止本地服务：
 

@@ -6,6 +6,8 @@ from .config import Settings
 
 
 def verify_access_token(x_assistant_token: str | None, settings: Settings) -> None:
+    if settings.local_only:
+        return
     configured = settings.assistant_access_token
     if configured is None or not configured.get_secret_value():
         raise HTTPException(

@@ -7,7 +7,7 @@ from app.config import Settings
 from app.main import create_app
 
 
-def build_client(tmp_path: Path) -> TestClient:
+def build_client(tmp_path: Path, local_only: bool = False) -> TestClient:
     public_path = tmp_path / "knowledge.json"
     public_path.write_text("[]", encoding="utf-8")
     settings = Settings(
@@ -17,6 +17,7 @@ def build_client(tmp_path: Path) -> TestClient:
         public_knowledge_path=public_path,
         private_knowledge_path=tmp_path / "private",
         cors_origins="http://localhost:8000",
+        local_only=local_only,
     )
     return TestClient(create_app(settings))
 
@@ -35,6 +36,12 @@ def test_search_requires_access_token(tmp_path: Path):
         headers={"X-Assistant-Token": "test-token"},
         json={"query": "CAN"},
     )
+    assert response.status_code == 200
+
+
+def test_local_only_mode_does_not_require_access_token(tmp_path: Path):
+    client = build_client(tmp_path, local_only=True)
+    response = client.post("/v1/knowledge/search", json={"query": "CAN"})
     assert response.status_code == 200
 
 

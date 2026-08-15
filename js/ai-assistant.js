@@ -113,6 +113,15 @@
     return url.toString().replace(/\/$/, "");
   }
 
+  function isLocalBackend(urlValue = config.backendUrl) {
+    try {
+      const hostname = new URL(urlValue).hostname;
+      return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1";
+    } catch (_) {
+      return false;
+    }
+  }
+
   function normalizeAccessToken(value) {
     const token = String(value || "").trim();
     if (!token) throw new Error("请填写访问令牌");
@@ -153,12 +162,16 @@
 
   function saveConfig() {
     try {
+      const backendUrl = normalizeBackendUrl(elements.backendUrl.value);
+      const localMode = isLocalBackend(backendUrl);
       config = {
-        backendUrl: normalizeBackendUrl(elements.backendUrl.value),
-        accessToken: normalizeAccessToken(elements.accessToken.value)
+        backendUrl,
+        accessToken: localMode && !elements.accessToken.value.trim()
+          ? ""
+          : normalizeAccessToken(elements.accessToken.value)
       };
       writeStorage("config", config);
-      elements.settingsStatus.textContent = "已保存";
+      elements.settingsStatus.textContent = localMode ? "已保存 · 本地模式无需访问令牌" : "已保存";
       checkHealth(true);
     } catch (error) {
       elements.settingsStatus.textContent = error.message;
@@ -369,17 +382,21 @@
     }
     const message = elements.input.value.trim();
     if (!message) return;
-    if (!config.backendUrl || !config.accessToken) {
+    if (!config.backendUrl || (!config.accessToken && !isLocalBackend())) {
       toggleSettings(true);
-      elements.settingsStatus.textContent = "请先完成后端连接设置";
+      elements.settingsStatus.textContent = isLocalBackend()
+        ? "本地后端未配置"
+        : "请先完成后端地址和访问令牌设置";
       return;
     }
-    try {
-      config.accessToken = normalizeAccessToken(config.accessToken);
-    } catch (error) {
-      toggleSettings(true);
-      elements.settingsStatus.textContent = error.message;
-      return;
+    if (config.accessToken) {
+      try {
+        config.accessToken = normalizeAccessToken(config.accessToken);
+      } catch (error) {
+        toggleSettings(true);
+        elements.settingsStatus.textContent = error.message;
+        return;
+      }
     }
 
     const priorHistory = history
@@ -398,13 +415,14 @@
     controller = new AbortController();
 
     try {
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream"
+      };
+      if (config.accessToken) headers["X-Assistant-Token"] = config.accessToken;
       const response = await fetch(`${config.backendUrl}/v1/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "X-Assistant-Token": config.accessToken
-        },
+        headers,
         body: JSON.stringify({ message, history: priorHistory, mode }),
         signal: controller.signal
       });

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     assistant_access_token: SecretStr | None = Field(
         default=None, validation_alias="ASSISTANT_ACCESS_TOKEN"
     )
+    local_only: bool = Field(default=False, validation_alias="LOCAL_ONLY")
     cors_origins: str = Field(
         default="https://lz0314-boy.github.io,http://localhost:8000,http://127.0.0.1:8000",
         validation_alias="CORS_ORIGINS",
