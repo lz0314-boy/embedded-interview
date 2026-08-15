@@ -521,7 +521,7 @@ mark { padding: 0 2px; background: var(--warning-soft); color: inherit; }
   inset: 0 0 0 auto;
   z-index: 70;
   display: grid;
-  width: min(var(--ai-drawer-width, 440px), calc(100vw - 20px));
+  width: min(var(--ai-drawer-width, 500px), calc(100vw - 20px));
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   overflow: hidden;
   border-left: 1px solid var(--border);
@@ -784,7 +784,7 @@ body.ai-resizing, body.ai-resizing * { cursor: col-resize !important; user-selec
   .learning-plan-head { grid-template-columns: 1fr; align-items: start; }
   body.ai-open { overflow: hidden; }
   body.ai-open .ai-scrim { visibility: visible; opacity: 1; }
-  .ai-drawer { width: min(440px, 100vw); }
+  .ai-drawer { width: min(500px, 100vw); }
   .ai-resize-handle { display: none; }
 }
 

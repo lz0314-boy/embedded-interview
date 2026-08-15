@@ -63,8 +63,9 @@
   let resizeState = null;
 
   const DRAWER_WIDTH_KEY = "drawerWidth";
-  const MIN_DRAWER_WIDTH = 360;
-  const MAX_DRAWER_WIDTH = 720;
+  const DEFAULT_DRAWER_WIDTH = 500;
+  const MIN_DRAWER_WIDTH = 380;
+  const MAX_DRAWER_WIDTH = 760;
 
   function readStorage(key, fallback) {
     try {
@@ -87,7 +88,7 @@
   }
 
   function applyDrawerWidth(value, persist = false) {
-    const width = clampDrawerWidth(Number(value) || 440);
+    const width = clampDrawerWidth(Number(value) || DEFAULT_DRAWER_WIDTH);
     elements.drawer.style.setProperty("--ai-drawer-width", `${width}px`);
     if (persist) writeStorage(DRAWER_WIDTH_KEY, width);
   }
@@ -357,7 +358,7 @@
       article.dataset.messageId = message.id;
       const label = document.createElement("span");
       label.className = "ai-message-label";
-      label.textContent = message.role === "assistant" ? "廖洲 AI" : "你";
+      label.textContent = message.role === "assistant" ? "LzzzAI" : "你";
       const content = document.createElement("div");
       content.className = "ai-message-content";
       appendContent(content, message.content || (message.streaming ? "正在思考…" : ""));
@@ -597,7 +598,8 @@
   elements.providerBaseUrl.value = config.providerBaseUrl;
   elements.providerModel.value = config.providerModel;
   elements.providerMode.value = config.providerApiMode;
-  applyDrawerWidth(readStorage(DRAWER_WIDTH_KEY, 440));
+  const savedDrawerWidth = readStorage(DRAWER_WIDTH_KEY, DEFAULT_DRAWER_WIDTH);
+  applyDrawerWidth(savedDrawerWidth === 440 ? DEFAULT_DRAWER_WIDTH : savedDrawerWidth);
   elements.accessToken.value = config.accessToken;
   setMode(mode);
   renderMessages();
