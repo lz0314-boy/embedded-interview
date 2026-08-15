@@ -98,7 +98,9 @@
   });
 
   const resumeCategories = categories.filter((category) => RESUME_CATEGORY_IDS.has(category.id));
-  const foundationCategories = categories.filter((category) => !RESUME_CATEGORY_IDS.has(category.id));
+  const foundationCategories = categories
+    .filter((category) => !RESUME_CATEGORY_IDS.has(category.id))
+    .sort((a, b) => Number(b.id === "linux-imx6ull-lab") - Number(a.id === "linux-imx6ull-lab"));
 
   let progress = storage.get("progress", {});
   let bookmarks = new Set(storage.get("bookmarks", []));
@@ -439,6 +441,27 @@
     });
   }
 
+  function learningPlan(category) {
+    if (!Array.isArray(category.plan) || !category.plan.length) return "";
+    return `<section class="learning-plan" aria-label="专项学习路线">
+      <div class="learning-plan-head">
+        <div>
+          <span class="eyebrow">LEARNING PATH</span>
+          <h2>六阶段板端学习路线</h2>
+          <p>${escapeHtml(category.pace || "按阶段完成理论、实验与验收产物。")}</p>
+        </div>
+        ${category.sprint ? `<div class="sprint-note"><strong>14 天面试冲刺</strong><p>${escapeHtml(category.sprint)}</p></div>` : ""}
+      </div>
+      <div class="learning-plan-grid">
+        ${category.plan.map((item) => `<button class="learning-step" data-question="${escapeHtml(item.firstQuestion)}">
+          <span class="learning-step-top"><span class="learning-phase">${escapeHtml(item.phase)}</span><span>${escapeHtml(item.duration)}</span></span>
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.deliverable)}</p>
+        </button>`).join("")}
+      </div>
+    </section>`;
+  }
+
   function renderCategory(categoryId) {
     const category = categoryMap.get(categoryId);
     if (!category) return renderLibrary();
@@ -447,9 +470,10 @@
     main.innerHTML = `
       <div class="breadcrumb"><button data-route="library">全部题库</button>${icon("chevron-right")}<span>${escapeHtml(category.name)}</span></div>
       <section class="category-summary">
-        <div><span class="eyebrow">${RESUME_CATEGORY_IDS.has(category.id) ? "RESUME DEFENSE" : "FOUNDATION"}</span><h1>${escapeHtml(category.name)}</h1><p>${escapeHtml(category.desc || "")}</p></div>
+        <div><span class="eyebrow">${category.plan?.length ? "PRACTICE ROADMAP" : RESUME_CATEGORY_IDS.has(category.id) ? "RESUME PROJECT" : "FOUNDATION"}</span><h1>${escapeHtml(category.name)}</h1><p>${escapeHtml(category.desc || "")}</p></div>
         <div class="category-progress"><strong>${stats.percent}%</strong><span>掌握度</span></div>
       </section>
+      ${learningPlan(category)}
       <div class="filter-bar">
         <button class="filter-chip ${state.priorityFilter === "all" ? "active" : ""}" data-priority-filter="all">全部</button>
         <button class="filter-chip ${state.priorityFilter === "must" ? "active" : ""}" data-priority-filter="must">必须掌握</button>
