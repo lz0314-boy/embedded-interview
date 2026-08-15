@@ -113,6 +113,17 @@
     return url.toString().replace(/\/$/, "");
   }
 
+  function normalizeAccessToken(value) {
+    const token = String(value || "").trim();
+    if (!token) throw new Error("请填写访问令牌");
+    // Fetch serializes request headers as ISO-8859-1; reject pasted Chinese/full-width text early.
+    if (!/^[\x20-\x7e]+$/.test(token)) {
+      throw new Error("访问令牌只能使用 ASCII 字母、数字和符号，请重新粘贴随机令牌");
+    }
+    if (token.length < 16) throw new Error("访问令牌长度太短，请使用至少 16 个字符的随机令牌");
+    return token;
+  }
+
   async function checkHealth(showResult = true) {
     if (!config.backendUrl) {
       setConnection("offline", "未配置");
@@ -144,9 +155,8 @@
     try {
       config = {
         backendUrl: normalizeBackendUrl(elements.backendUrl.value),
-        accessToken: elements.accessToken.value.trim()
+        accessToken: normalizeAccessToken(elements.accessToken.value)
       };
-      if (!config.accessToken) throw new Error("请填写访问令牌");
       writeStorage("config", config);
       elements.settingsStatus.textContent = "已保存";
       checkHealth(true);
@@ -362,6 +372,13 @@
     if (!config.backendUrl || !config.accessToken) {
       toggleSettings(true);
       elements.settingsStatus.textContent = "请先完成后端连接设置";
+      return;
+    }
+    try {
+      config.accessToken = normalizeAccessToken(config.accessToken);
+    } catch (error) {
+      toggleSettings(true);
+      elements.settingsStatus.textContent = error.message;
       return;
     }
 
