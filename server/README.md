@@ -4,6 +4,20 @@
 
 ## 本地运行
 
+如果只在电脑上使用，推荐直接在仓库根目录运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-local-assistant.ps1
+```
+
+首次运行会自动创建 `server/.env`、生成本地访问令牌并打开配置文件。填写 `OPENAI_API_KEY` 后再次运行即可。之后脚本会启动前端和后端并自动打开浏览器，不需要重复配置令牌。
+
+停止本地服务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\stop-local-assistant.ps1
+```
+
 ```powershell
 cd server
 python -m pip install -r requirements-dev.txt
