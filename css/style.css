@@ -584,6 +584,23 @@ body.ai-resizing, body.ai-resizing * { cursor: col-resize !important; user-selec
 }
 .ai-header-actions { display: flex; align-items: center; gap: 2px; }
 .ai-header-actions .icon-btn { color: var(--text-secondary); }
+.ai-connect-btn {
+  display: inline-flex;
+  min-width: 56px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+}
+.ai-connect-btn:hover, .ai-connect-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.ai-connect-btn svg { width: 14px; height: 14px; }
 
 .ai-mode-tabs {
   display: grid;
@@ -826,6 +843,8 @@ body.ai-resizing, body.ai-resizing * { cursor: col-resize !important; user-selec
   .ai-launch-btn .ai-status-dot { position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; }
   .ai-drawer { width: 100vw; border-left: 0; }
   .ai-drawer-header { min-height: 58px; padding-left: 12px; }
+  .ai-connect-btn { min-width: 34px; width: 34px; padding: 0; }
+  .ai-connect-btn span { display: none; }
   .ai-messages { padding: 18px 14px 24px; }
   .ai-settings { padding: 12px 14px 14px; }
   .ai-composer { padding-bottom: max(9px, env(safe-area-inset-bottom)); }

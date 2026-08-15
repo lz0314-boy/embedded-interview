@@ -145,6 +145,8 @@
   function toggleSettings(force) {
     const shouldOpen = typeof force === "boolean" ? force : elements.settings.hidden;
     elements.settings.hidden = !shouldOpen;
+    elements.settingsButton.classList.toggle("active", shouldOpen);
+    elements.settingsButton.setAttribute("aria-expanded", String(shouldOpen));
     if (shouldOpen) {
       elements.backendUrl.value = config.backendUrl;
       elements.providerBaseUrl.value = config.providerBaseUrl;
