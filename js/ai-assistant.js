@@ -63,9 +63,9 @@
   let resizeState = null;
 
   const DRAWER_WIDTH_KEY = "drawerWidth";
-  const DEFAULT_DRAWER_WIDTH = 500;
-  const MIN_DRAWER_WIDTH = 380;
-  const MAX_DRAWER_WIDTH = 760;
+  const DEFAULT_DRAWER_WIDTH = 440;
+  const MIN_DRAWER_WIDTH = 360;
+  const MAX_DRAWER_WIDTH = 960;
 
   function readStorage(key, fallback) {
     try {
@@ -358,7 +358,7 @@
       article.dataset.messageId = message.id;
       const label = document.createElement("span");
       label.className = "ai-message-label";
-      label.textContent = message.role === "assistant" ? "LzzzAI" : "你";
+      label.textContent = message.role === "assistant" ? "Lzzz AI" : "你";
       const content = document.createElement("div");
       content.className = "ai-message-content";
       appendContent(content, message.content || (message.streaming ? "正在思考…" : ""));
@@ -598,8 +598,7 @@
   elements.providerBaseUrl.value = config.providerBaseUrl;
   elements.providerModel.value = config.providerModel;
   elements.providerMode.value = config.providerApiMode;
-  const savedDrawerWidth = readStorage(DRAWER_WIDTH_KEY, DEFAULT_DRAWER_WIDTH);
-  applyDrawerWidth(savedDrawerWidth === 440 ? DEFAULT_DRAWER_WIDTH : savedDrawerWidth);
+  applyDrawerWidth(readStorage(DRAWER_WIDTH_KEY, DEFAULT_DRAWER_WIDTH));
   elements.accessToken.value = config.accessToken;
   setMode(mode);
   renderMessages();
