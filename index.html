@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f7f8">
   <title>嵌入式面试作战台</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=21">
   <script src="js/lucide.min.js?v=0.468.0" defer></script>
   <script src="js/data.js?v=12" defer></script>
   <script src="js/data_resume.js?v=19" defer></script>
@@ -15,7 +15,7 @@
   <script src="js/data_linux_lab.js?v=12" defer></script>
   <script src="js/data_supplement.js?v=12" defer></script>
   <script src="js/app.js?v=12" defer></script>
-  <script src="js/ai-assistant.js?v=7" defer></script>
+  <script src="js/ai-assistant.js?v=8" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -94,6 +94,7 @@
       </div>
       <div class="ai-header-actions">
         <button class="ai-connect-btn" id="aiSettingsBtn" aria-label="连接设置" aria-expanded="false" title="连接设置"><i data-lucide="settings-2"></i><span>连接</span></button>
+        <button class="icon-btn" id="aiUsageBtn" aria-label="Token 用量" aria-expanded="false" title="Token 用量"><i data-lucide="chart-column"></i></button>
         <button class="icon-btn" id="aiClearBtn" aria-label="清空对话" title="清空对话"><i data-lucide="trash-2"></i></button>
         <button class="icon-btn" id="aiCloseBtn" aria-label="关闭 AI 助手" title="关闭 AI 助手"><i data-lucide="x"></i></button>
       </div>
@@ -137,6 +138,23 @@
         <button class="secondary-btn" id="aiTestBtn" type="button"><i data-lucide="activity"></i>测试</button>
         <button class="primary-btn" id="aiSaveBtn" type="button"><i data-lucide="save"></i>保存</button>
       </div>
+    </section>
+
+    <section class="ai-usage" id="aiUsage" hidden>
+      <div class="ai-usage-head">
+        <strong>Token 用量</strong>
+        <button class="icon-btn" id="aiUsageCloseBtn" aria-label="关闭用量" title="关闭用量"><i data-lucide="chevron-up"></i></button>
+      </div>
+      <div class="ai-usage-summary">
+        <div class="ai-usage-stat"><span>本次</span><strong id="aiUsageLast">--</strong></div>
+        <div class="ai-usage-stat"><span>今日</span><strong id="aiUsageToday">0</strong></div>
+        <div class="ai-usage-stat"><span>累计</span><strong id="aiUsageTotal">0</strong></div>
+      </div>
+      <div class="ai-usage-toolbar">
+        <span id="aiUsageStatus">暂无调用记录</span>
+        <button class="secondary-btn" id="aiUsageClearBtn" type="button"><i data-lucide="trash-2"></i>清空记录</button>
+      </div>
+      <div class="ai-usage-list" id="aiUsageList"></div>
     </section>
 
     <div class="ai-messages" id="aiMessages" aria-live="polite"></div>

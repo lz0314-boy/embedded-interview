@@ -80,7 +80,7 @@ node server/scripts/export_knowledge.cjs
 ## API
 
 - `GET /health`：公开健康检查
-- `POST /v1/chat`：需 `X-Assistant-Token`，返回 SSE 事件 `meta`、`sources`、`delta`、`done` 或 `error`
+- `POST /v1/chat`：需 `X-Assistant-Token`，返回 SSE 事件 `meta`、`sources`、`delta`、`usage`、`done` 或 `error`。`usage` 包含 `inputTokens`、`outputTokens`、`totalTokens`；服务商返回真实 usage 时 `exact=true`，兼容接口未返回时为本地估算值 `exact=false`。
 - `POST /v1/knowledge/search`：需 `X-Assistant-Token`，返回检索片段
 
 运行测试：

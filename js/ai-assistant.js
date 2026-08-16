@@ -3,6 +3,7 @@
 
   const STORAGE_PREFIX = "ei_ai_v1_";
   const MAX_STORED_MESSAGES = 30;
+  const MAX_USAGE_RECORDS = 100;
   const MODES = {
     answer: { label: "答疑模式", placeholder: "输入简历、项目或嵌入式问题" },
     mock: { label: "模拟面试", placeholder: "输入岗位方向，开始一轮模拟面试" },
@@ -17,8 +18,17 @@
     close: document.querySelector("#aiCloseBtn"),
     clear: document.querySelector("#aiClearBtn"),
     settingsButton: document.querySelector("#aiSettingsBtn"),
+    usageButton: document.querySelector("#aiUsageBtn"),
     settingsClose: document.querySelector("#aiSettingsCloseBtn"),
     settings: document.querySelector("#aiSettings"),
+    usageClose: document.querySelector("#aiUsageCloseBtn"),
+    usage: document.querySelector("#aiUsage"),
+    usageLast: document.querySelector("#aiUsageLast"),
+    usageToday: document.querySelector("#aiUsageToday"),
+    usageTotal: document.querySelector("#aiUsageTotal"),
+    usageStatus: document.querySelector("#aiUsageStatus"),
+    usageList: document.querySelector("#aiUsageList"),
+    usageClear: document.querySelector("#aiUsageClearBtn"),
     backendUrl: document.querySelector("#aiBackendUrl"),
     providerBaseUrl: document.querySelector("#aiProviderBaseUrl"),
     providerModel: document.querySelector("#aiProviderModel"),
@@ -56,6 +66,9 @@
   };
   let history = readStorage("history", []);
   if (!Array.isArray(history)) history = [];
+  let usageRecords = readStorage("usage", []);
+  if (!Array.isArray(usageRecords)) usageRecords = [];
+  usageRecords = usageRecords.filter((record) => record && typeof record === "object").slice(0, MAX_USAGE_RECORDS);
   let mode = readStorage("mode", "answer");
   if (!MODES[mode]) mode = "answer";
   let controller = null;
@@ -80,6 +93,111 @@
     try {
       localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
     } catch (_) {}
+  }
+
+  function formatCount(value) {
+    return Number(value || 0).toLocaleString("zh-CN");
+  }
+
+  function localDateKey(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  }
+
+  function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "未知时间";
+    return date.toLocaleString("zh-CN", {
+      month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"
+    });
+  }
+
+  function normalizeUsage(data) {
+    const inputTokens = Math.max(0, Number(data.inputTokens) || 0);
+    const outputTokens = Math.max(0, Number(data.outputTokens) || 0);
+    const totalTokens = Math.max(inputTokens + outputTokens, Number(data.totalTokens) || 0);
+    return {
+      requestId: String(data.requestId || ""),
+      model: String(data.model || config.providerModel || "未知模型"),
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      cachedInputTokens: Math.max(0, Number(data.cachedInputTokens) || 0),
+      exact: data.exact === true,
+      source: data.source === "provider" ? "provider" : "estimated",
+      incomplete: data.incomplete === true
+    };
+  }
+
+  function usageLine(usage) {
+    const quality = usage.exact ? "精确" : "估算";
+    return `本轮 ${formatCount(usage.totalTokens)} tokens · 输入 ${formatCount(usage.inputTokens)} / 输出 ${formatCount(usage.outputTokens)} · ${quality}`;
+  }
+
+  function recordUsage(data) {
+    const usage = normalizeUsage(data);
+    const record = {
+      ...usage,
+      requestId: usage.requestId || crypto.randomUUID(),
+      timestamp: Number(data.timestamp) || Date.now(),
+      mode: mode
+    };
+    const existingIndex = usageRecords.findIndex((item) => item.requestId && item.requestId === record.requestId);
+    if (existingIndex >= 0) usageRecords.splice(existingIndex, 1);
+    usageRecords.unshift(record);
+    usageRecords = usageRecords.slice(0, MAX_USAGE_RECORDS);
+    writeStorage("usage", usageRecords);
+    renderUsage();
+    return record;
+  }
+
+  function renderUsage() {
+    const today = localDateKey(Date.now());
+    const todayRecords = usageRecords.filter((record) => localDateKey(record.timestamp) === today);
+    const total = usageRecords.reduce((sum, record) => sum + (Number(record.totalTokens) || 0), 0);
+    const todayTotal = todayRecords.reduce((sum, record) => sum + (Number(record.totalTokens) || 0), 0);
+    elements.usageLast.textContent = usageRecords[0] ? formatCount(usageRecords[0].totalTokens) : "--";
+    elements.usageToday.textContent = formatCount(todayTotal);
+    elements.usageTotal.textContent = formatCount(total);
+    if (!usageRecords.length) {
+      elements.usageStatus.textContent = "暂无调用记录";
+      elements.usageList.replaceChildren();
+      const empty = document.createElement("div");
+      empty.className = "ai-usage-empty";
+      empty.textContent = "发送一次问题后，这里会记录 token 用量";
+      elements.usageList.appendChild(empty);
+      return;
+    }
+    const exactCount = usageRecords.filter((record) => record.exact).length;
+    const estimatedCount = usageRecords.length - exactCount;
+    elements.usageStatus.textContent = `${usageRecords.length} 次调用 · 精确 ${exactCount} · 估算 ${estimatedCount}`;
+    elements.usageList.replaceChildren();
+    usageRecords.slice(0, 20).forEach((record) => {
+      const entry = document.createElement("div");
+      entry.className = "ai-usage-entry";
+      const head = document.createElement("div");
+      head.className = "ai-usage-entry-head";
+      const model = document.createElement("strong");
+      model.textContent = `${record.model || "未知模型"} · ${record.mode === "mock" ? "模拟" : record.mode === "review" ? "点评" : "答疑"}`;
+      const time = document.createElement("span");
+      time.textContent = formatDateTime(record.timestamp);
+      head.append(model, time);
+      const detail = document.createElement("div");
+      detail.className = "ai-usage-entry-detail";
+      const totalCopy = document.createElement("span");
+      totalCopy.textContent = `合计 ${formatCount(record.totalTokens)}`;
+      const inputCopy = document.createElement("span");
+      inputCopy.textContent = `输入 ${formatCount(record.inputTokens)}`;
+      const outputCopy = document.createElement("span");
+      outputCopy.textContent = `输出 ${formatCount(record.outputTokens)}`;
+      const quality = document.createElement("span");
+      quality.className = record.exact ? "is-exact" : "is-estimated";
+      quality.textContent = record.exact ? "服务商精确值" : "本地估算值";
+      detail.append(totalCopy, inputCopy, outputCopy, quality);
+      entry.append(head, detail);
+      elements.usageList.appendChild(entry);
+    });
   }
 
   function clampDrawerWidth(value) {
@@ -161,6 +279,9 @@
     elements.settingsButton.classList.toggle("active", shouldOpen);
     elements.settingsButton.setAttribute("aria-expanded", String(shouldOpen));
     if (shouldOpen) {
+      elements.usage.hidden = true;
+      elements.usageButton.classList.remove("active");
+      elements.usageButton.setAttribute("aria-expanded", "false");
       elements.backendUrl.value = config.backendUrl;
       elements.providerBaseUrl.value = config.providerBaseUrl;
       elements.providerModel.value = config.providerModel;
@@ -168,6 +289,19 @@
       elements.accessToken.value = config.accessToken;
       elements.settingsStatus.textContent = "";
       window.setTimeout(() => focusInsideDrawer(elements.backendUrl), 50);
+    }
+  }
+
+  function toggleUsage(force) {
+    const shouldOpen = typeof force === "boolean" ? force : elements.usage.hidden;
+    elements.usage.hidden = !shouldOpen;
+    elements.usageButton.classList.toggle("active", shouldOpen);
+    elements.usageButton.setAttribute("aria-expanded", String(shouldOpen));
+    if (shouldOpen) {
+      elements.settings.hidden = true;
+      elements.settingsButton.classList.remove("active");
+      elements.settingsButton.setAttribute("aria-expanded", "false");
+      renderUsage();
     }
   }
 
@@ -378,6 +512,12 @@
       content.className = "ai-message-content";
       appendContent(content, message.content || (message.streaming ? "正在思考…" : ""));
       article.append(label, content);
+      if (message.role === "assistant" && message.usage) {
+        const usage = document.createElement("div");
+        usage.className = "ai-message-usage";
+        usage.textContent = usageLine(message.usage);
+        article.appendChild(usage);
+      }
       if (message.sources?.length) {
         const sources = document.createElement("div");
         sources.className = "ai-sources";
@@ -405,7 +545,7 @@
     const completed = history
       .filter((message) => !message.streaming && message.content)
       .slice(-MAX_STORED_MESSAGES)
-      .map(({ id, role, content, sources, error }) => ({ id, role, content, sources, error }));
+      .map(({ id, role, content, sources, error, usage }) => ({ id, role, content, sources, error, usage }));
     writeStorage("history", completed);
   }
 
@@ -442,12 +582,21 @@
       for (const block of blocks) {
         const parsed = parseSseBlock(block);
         if (!parsed || !streamingMessage) continue;
-        if (parsed.event === "delta") {
+        if (parsed.event === "meta") {
+          streamingMessage.requestId = parsed.data.requestId || streamingMessage.requestId;
+          streamingMessage.model = parsed.data.model || streamingMessage.model;
+        } else if (parsed.event === "delta") {
           streamingMessage.content += parsed.data.text || "";
           streamingMessage.streaming = false;
           updateStreamingMessage();
         } else if (parsed.event === "sources") {
           streamingMessage.sources = parsed.data.items || [];
+        } else if (parsed.event === "usage") {
+          streamingMessage.usage = recordUsage({
+            ...parsed.data,
+            requestId: parsed.data.requestId || streamingMessage.requestId,
+            model: parsed.data.model || streamingMessage.model
+          });
         } else if (parsed.event === "error") {
           throw new Error(parsed.data.message || "AI 服务返回错误");
         }
@@ -455,10 +604,19 @@
       if (done) {
         const finalBlock = parseSseBlock(buffer);
         if (finalBlock && streamingMessage) {
-          if (finalBlock.event === "delta") {
+          if (finalBlock.event === "meta") {
+            streamingMessage.requestId = finalBlock.data.requestId || streamingMessage.requestId;
+            streamingMessage.model = finalBlock.data.model || streamingMessage.model;
+          } else if (finalBlock.event === "delta") {
             streamingMessage.content += finalBlock.data.text || "";
           } else if (finalBlock.event === "sources") {
             streamingMessage.sources = finalBlock.data.items || [];
+          } else if (finalBlock.event === "usage") {
+            streamingMessage.usage = recordUsage({
+              ...finalBlock.data,
+              requestId: finalBlock.data.requestId || streamingMessage.requestId,
+              model: finalBlock.data.model || streamingMessage.model
+            });
           } else if (finalBlock.event === "error") {
             throw new Error(finalBlock.data.message || "AI 服务返回错误");
           }
@@ -564,6 +722,21 @@
   elements.scrim.addEventListener("click", closeDrawer);
   elements.settingsButton.addEventListener("click", () => toggleSettings());
   elements.settingsClose.addEventListener("click", () => toggleSettings(false));
+  elements.usageButton.addEventListener("click", () => toggleUsage());
+  elements.usageClose.addEventListener("click", () => toggleUsage(false));
+  elements.usageClear.addEventListener("click", () => {
+    if (!usageRecords.length) return;
+    if (!window.confirm("确定清空本机保存的 token 用量记录吗？")) return;
+    usageRecords = [];
+    writeStorage("usage", usageRecords);
+    history = history.map((message) => {
+      const { usage: _usage, ...rest } = message;
+      return rest;
+    });
+    persistHistory();
+    renderMessages();
+    renderUsage();
+  });
   elements.save.addEventListener("click", saveConfig);
   elements.test.addEventListener("click", () => {
     try {
@@ -605,6 +778,7 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && document.body.classList.contains("ai-open")) {
       if (!elements.settings.hidden) toggleSettings(false);
+      else if (!elements.usage.hidden) toggleUsage(false);
       else closeDrawer();
     }
   });
@@ -617,6 +791,7 @@
   elements.accessToken.value = config.accessToken;
   setMode(mode);
   renderMessages();
+  renderUsage();
   updateComposer();
   refreshIcons();
   if (config.backendUrl) checkHealth(false);
