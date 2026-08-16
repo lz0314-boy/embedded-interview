@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#f5f7f8">
   <title>嵌入式面试作战台</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/style.css?v=21">
+  <link rel="stylesheet" href="css/style.css?v=22">
   <script src="js/lucide.min.js?v=0.468.0" defer></script>
   <script src="js/data.js?v=12" defer></script>
   <script src="js/data_resume.js?v=19" defer></script>
@@ -15,7 +15,7 @@
   <script src="js/data_linux_lab.js?v=12" defer></script>
   <script src="js/data_supplement.js?v=12" defer></script>
   <script src="js/app.js?v=12" defer></script>
-  <script src="js/ai-assistant.js?v=8" defer></script>
+  <script src="js/ai-assistant.js?v=9" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -95,7 +95,8 @@
       <div class="ai-header-actions">
         <button class="ai-connect-btn" id="aiSettingsBtn" aria-label="连接设置" aria-expanded="false" title="连接设置"><i data-lucide="settings-2"></i><span>连接</span></button>
         <button class="icon-btn" id="aiUsageBtn" aria-label="Token 用量" aria-expanded="false" title="Token 用量"><i data-lucide="chart-column"></i></button>
-        <button class="icon-btn" id="aiClearBtn" aria-label="清空对话" title="清空对话"><i data-lucide="trash-2"></i></button>
+        <button class="icon-btn" id="aiSessionsBtn" aria-label="历史会话" aria-expanded="false" title="历史会话"><i data-lucide="history"></i></button>
+        <button class="icon-btn" id="aiNewSessionBtn" aria-label="新建会话" title="新建会话"><i data-lucide="square-pen"></i></button>
         <button class="icon-btn" id="aiCloseBtn" aria-label="关闭 AI 助手" title="关闭 AI 助手"><i data-lucide="x"></i></button>
       </div>
     </header>
@@ -155,6 +156,17 @@
         <button class="secondary-btn" id="aiUsageClearBtn" type="button"><i data-lucide="trash-2"></i>清空记录</button>
       </div>
       <div class="ai-usage-list" id="aiUsageList"></div>
+    </section>
+
+    <section class="ai-sessions" id="aiSessions" hidden>
+      <div class="ai-sessions-head">
+        <strong>历史会话</strong>
+        <div>
+          <button class="secondary-btn" id="aiSessionsNewBtn" type="button"><i data-lucide="square-pen"></i>新建</button>
+          <button class="icon-btn" id="aiSessionsCloseBtn" aria-label="关闭历史会话" title="关闭历史会话"><i data-lucide="chevron-up"></i></button>
+        </div>
+      </div>
+      <div class="ai-session-list" id="aiSessionList"></div>
     </section>
 
     <div class="ai-messages" id="aiMessages" aria-live="polite"></div>

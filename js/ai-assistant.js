@@ -4,6 +4,7 @@
   const STORAGE_PREFIX = "ei_ai_v1_";
   const MAX_STORED_MESSAGES = 30;
   const MAX_USAGE_RECORDS = 100;
+  const MAX_SESSIONS = 20;
   const MODES = {
     answer: { label: "答疑模式", placeholder: "输入简历、项目或嵌入式问题" },
     mock: { label: "模拟面试", placeholder: "输入岗位方向，开始一轮模拟面试" },
@@ -16,9 +17,10 @@
     scrim: document.querySelector("#aiScrim"),
     launch: document.querySelector("#aiLaunchBtn"),
     close: document.querySelector("#aiCloseBtn"),
-    clear: document.querySelector("#aiClearBtn"),
+    newSession: document.querySelector("#aiNewSessionBtn"),
     settingsButton: document.querySelector("#aiSettingsBtn"),
     usageButton: document.querySelector("#aiUsageBtn"),
+    sessionsButton: document.querySelector("#aiSessionsBtn"),
     settingsClose: document.querySelector("#aiSettingsCloseBtn"),
     settings: document.querySelector("#aiSettings"),
     usageClose: document.querySelector("#aiUsageCloseBtn"),
@@ -29,6 +31,10 @@
     usageStatus: document.querySelector("#aiUsageStatus"),
     usageList: document.querySelector("#aiUsageList"),
     usageClear: document.querySelector("#aiUsageClearBtn"),
+    sessions: document.querySelector("#aiSessions"),
+    sessionsClose: document.querySelector("#aiSessionsCloseBtn"),
+    sessionsNew: document.querySelector("#aiSessionsNewBtn"),
+    sessionList: document.querySelector("#aiSessionList"),
     backendUrl: document.querySelector("#aiBackendUrl"),
     providerBaseUrl: document.querySelector("#aiProviderBaseUrl"),
     providerModel: document.querySelector("#aiProviderModel"),
@@ -64,8 +70,18 @@
     ...defaultConfig,
     ...(savedConfig && typeof savedConfig === "object" ? savedConfig : {})
   };
-  let history = readStorage("history", []);
-  if (!Array.isArray(history)) history = [];
+  const legacyHistory = readStorage("history", []);
+  let sessions = normalizeSessions(readStorage("sessions", []));
+  if (!sessions.length) {
+    sessions = [createSession(Array.isArray(legacyHistory) ? legacyHistory : [])];
+  }
+  let activeSessionId = String(readStorage("activeSessionId", "") || "");
+  if (!sessions.some((session) => session.id === activeSessionId)) {
+    activeSessionId = sessions[0].id;
+  }
+  let history = [...sessions.find((session) => session.id === activeSessionId).messages];
+  writeStorage("sessions", sessions);
+  writeStorage("activeSessionId", activeSessionId);
   let usageRecords = readStorage("usage", []);
   if (!Array.isArray(usageRecords)) usageRecords = [];
   usageRecords = usageRecords.filter((record) => record && typeof record === "object").slice(0, MAX_USAGE_RECORDS);
@@ -93,6 +109,66 @@
     try {
       localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
     } catch (_) {}
+  }
+
+  function normalizeMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    return messages
+      .filter((message) => message && ["user", "assistant"].includes(message.role) && typeof message.content === "string")
+      .slice(-MAX_STORED_MESSAGES)
+      .map((message) => ({
+        id: String(message.id || crypto.randomUUID()),
+        role: message.role,
+        content: message.content,
+        sources: Array.isArray(message.sources) ? message.sources : undefined,
+        error: message.error === true || undefined,
+        usage: message.usage && typeof message.usage === "object" ? message.usage : undefined
+      }));
+  }
+
+  function deriveSessionTitle(messages) {
+    const firstQuestion = messages.find((message) => message.role === "user" && message.content.trim());
+    if (!firstQuestion) return "新会话";
+    const title = firstQuestion.content.replace(/\s+/g, " ").trim();
+    return title.length > 26 ? `${title.slice(0, 26)}…` : title;
+  }
+
+  function createSession(messages = []) {
+    const normalizedMessages = normalizeMessages(messages);
+    const now = Date.now();
+    return {
+      id: crypto.randomUUID(),
+      title: deriveSessionTitle(normalizedMessages),
+      createdAt: now,
+      updatedAt: now,
+      messages: normalizedMessages
+    };
+  }
+
+  function normalizeSessions(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter((session) => session && typeof session === "object" && Array.isArray(session.messages))
+      .map((session) => {
+        const messages = normalizeMessages(session.messages);
+        const createdAt = Number(session.createdAt) || Date.now();
+        return {
+          id: String(session.id || crypto.randomUUID()),
+          title: deriveSessionTitle(messages),
+          createdAt,
+          updatedAt: Number(session.updatedAt) || createdAt,
+          messages
+        };
+      })
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, MAX_SESSIONS);
+  }
+
+  function saveSessions() {
+    sessions.sort((left, right) => right.updatedAt - left.updatedAt);
+    sessions = sessions.slice(0, MAX_SESSIONS);
+    writeStorage("sessions", sessions);
+    writeStorage("activeSessionId", activeSessionId);
   }
 
   function formatCount(value) {
@@ -141,7 +217,8 @@
       ...usage,
       requestId: usage.requestId || crypto.randomUUID(),
       timestamp: Number(data.timestamp) || Date.now(),
-      mode: mode
+      mode: mode,
+      sessionId: activeSessionId
     };
     const existingIndex = usageRecords.findIndex((item) => item.requestId && item.requestId === record.requestId);
     if (existingIndex >= 0) usageRecords.splice(existingIndex, 1);
@@ -282,6 +359,9 @@
       elements.usage.hidden = true;
       elements.usageButton.classList.remove("active");
       elements.usageButton.setAttribute("aria-expanded", "false");
+      elements.sessions.hidden = true;
+      elements.sessionsButton.classList.remove("active");
+      elements.sessionsButton.setAttribute("aria-expanded", "false");
       elements.backendUrl.value = config.backendUrl;
       elements.providerBaseUrl.value = config.providerBaseUrl;
       elements.providerModel.value = config.providerModel;
@@ -301,8 +381,125 @@
       elements.settings.hidden = true;
       elements.settingsButton.classList.remove("active");
       elements.settingsButton.setAttribute("aria-expanded", "false");
+      elements.sessions.hidden = true;
+      elements.sessionsButton.classList.remove("active");
+      elements.sessionsButton.setAttribute("aria-expanded", "false");
       renderUsage();
     }
+  }
+
+  function toggleSessions(force) {
+    const shouldOpen = typeof force === "boolean" ? force : elements.sessions.hidden;
+    elements.sessions.hidden = !shouldOpen;
+    elements.sessionsButton.classList.toggle("active", shouldOpen);
+    elements.sessionsButton.setAttribute("aria-expanded", String(shouldOpen));
+    if (shouldOpen) {
+      elements.settings.hidden = true;
+      elements.settingsButton.classList.remove("active");
+      elements.settingsButton.setAttribute("aria-expanded", "false");
+      elements.usage.hidden = true;
+      elements.usageButton.classList.remove("active");
+      elements.usageButton.setAttribute("aria-expanded", "false");
+      renderSessions();
+    }
+  }
+
+  function renderSessions() {
+    elements.sessionList.replaceChildren();
+    sessions
+      .slice()
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .forEach((session) => {
+        const row = document.createElement("div");
+        row.className = `ai-session-row${session.id === activeSessionId ? " active" : ""}`;
+        const main = document.createElement("button");
+        main.type = "button";
+        main.className = "ai-session-main";
+        const title = document.createElement("strong");
+        title.textContent = session.title || "新会话";
+        const meta = document.createElement("span");
+        meta.textContent = `${session.messages.length} 条消息 · ${formatDateTime(session.updatedAt)}`;
+        main.append(title, meta);
+        main.addEventListener("click", () => selectSession(session.id));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "icon-btn ai-session-delete";
+        remove.setAttribute("aria-label", `删除会话：${session.title || "新会话"}`);
+        remove.title = "删除会话";
+        remove.innerHTML = '<i data-lucide="trash-2"></i>';
+        remove.addEventListener("click", () => deleteSession(session.id));
+        row.append(main, remove);
+        elements.sessionList.appendChild(row);
+      });
+    refreshIcons(elements.sessionList);
+  }
+
+  function startNewSession() {
+    if (controller) return;
+    persistHistory();
+    if (!history.length) {
+      elements.input.value = "";
+      updateComposer();
+      toggleSettings(false);
+      toggleUsage(false);
+      toggleSessions(false);
+      focusInsideDrawer(elements.input);
+      return;
+    }
+    const session = createSession();
+    sessions.unshift(session);
+    activeSessionId = session.id;
+    history = [];
+    elements.input.value = "";
+    saveSessions();
+    toggleSettings(false);
+    toggleUsage(false);
+    toggleSessions(false);
+    renderMessages();
+    renderSessions();
+    updateModeHint();
+    updateComposer();
+    focusInsideDrawer(elements.input);
+  }
+
+  function selectSession(sessionId) {
+    if (controller || sessionId === activeSessionId) {
+      if (sessionId === activeSessionId) toggleSessions(false);
+      return;
+    }
+    persistHistory();
+    const target = sessions.find((session) => session.id === sessionId);
+    if (!target) return;
+    activeSessionId = target.id;
+    target.updatedAt = Date.now();
+    history = [...target.messages];
+    elements.input.value = "";
+    saveSessions();
+    toggleSessions(false);
+    renderMessages();
+    renderSessions();
+    updateModeHint();
+    updateComposer();
+    focusInsideDrawer(elements.input);
+  }
+
+  function deleteSession(sessionId) {
+    if (controller) return;
+    const target = sessions.find((session) => session.id === sessionId);
+    if (!target || !window.confirm(`确定删除会话“${target.title || "新会话"}”吗？`)) return;
+    persistHistory();
+    sessions = sessions.filter((session) => session.id !== sessionId);
+    if (!sessions.length) sessions = [createSession()];
+    if (activeSessionId === sessionId) {
+      activeSessionId = sessions[0].id;
+      history = [...sessions[0].messages];
+      elements.input.value = "";
+      renderMessages();
+      updateModeHint();
+      updateComposer();
+    }
+    saveSessions();
+    renderSessions();
   }
 
   function normalizeBackendUrl(value) {
@@ -414,8 +611,13 @@
       button.classList.toggle("active", active);
       button.setAttribute("aria-selected", String(active));
     });
-    elements.modeHint.textContent = MODES[mode].label;
+    updateModeHint();
     elements.input.placeholder = MODES[mode].placeholder;
+  }
+
+  function updateModeHint() {
+    const session = sessions.find((item) => item.id === activeSessionId);
+    elements.modeHint.textContent = `${MODES[mode].label} · ${session?.title || "新会话"}`;
   }
 
   function emptyState() {
@@ -546,7 +748,21 @@
       .filter((message) => !message.streaming && message.content)
       .slice(-MAX_STORED_MESSAGES)
       .map(({ id, role, content, sources, error, usage }) => ({ id, role, content, sources, error, usage }));
+    let session = sessions.find((item) => item.id === activeSessionId);
+    if (!session) {
+      session = createSession();
+      session.id = activeSessionId || session.id;
+      activeSessionId = session.id;
+      sessions.push(session);
+    }
+    history = completed;
+    session.messages = [...completed];
+    session.title = deriveSessionTitle(completed);
+    session.updatedAt = Date.now();
+    updateModeHint();
     writeStorage("history", completed);
+    saveSessions();
+    if (!elements.sessions.hidden) renderSessions();
   }
 
   function setStreaming(active) {
@@ -555,6 +771,9 @@
     elements.send.title = active ? "停止生成" : "发送问题";
     elements.send.innerHTML = `<i data-lucide="${active ? "square" : "send"}"></i>`;
     elements.input.disabled = active;
+    elements.newSession.disabled = active;
+    elements.sessionsButton.disabled = active;
+    elements.sessionsNew.disabled = active;
     refreshIcons(elements.send);
   }
 
@@ -654,6 +873,7 @@
       .filter((item) => !item.error && !item.streaming)
       .slice(-12)
       .map((item) => ({ role: item.role, content: item.content }));
+    toggleSessions(false);
     history.push({ id: crypto.randomUUID(), role: "user", content: message });
     streamingMessage = {
       id: crypto.randomUUID(), role: "assistant", content: "", sources: [], streaming: true
@@ -724,16 +944,26 @@
   elements.settingsClose.addEventListener("click", () => toggleSettings(false));
   elements.usageButton.addEventListener("click", () => toggleUsage());
   elements.usageClose.addEventListener("click", () => toggleUsage(false));
+  elements.sessionsButton.addEventListener("click", () => toggleSessions());
+  elements.sessionsClose.addEventListener("click", () => toggleSessions(false));
+  elements.newSession.addEventListener("click", startNewSession);
+  elements.sessionsNew.addEventListener("click", startNewSession);
   elements.usageClear.addEventListener("click", () => {
     if (!usageRecords.length) return;
     if (!window.confirm("确定清空本机保存的 token 用量记录吗？")) return;
     usageRecords = [];
     writeStorage("usage", usageRecords);
-    history = history.map((message) => {
-      const { usage: _usage, ...rest } = message;
-      return rest;
+    sessions = sessions.map((session) => {
+      const messages = session.messages.map((message) => {
+        const { usage: _usage, ...rest } = message;
+        return rest;
+      });
+      return { ...session, messages };
     });
-    persistHistory();
+    const active = sessions.find((session) => session.id === activeSessionId);
+    history = active ? [...active.messages] : [];
+    writeStorage("history", history);
+    saveSessions();
     renderMessages();
     renderUsage();
   });
@@ -754,12 +984,6 @@
     elements.tokenToggle.innerHTML = `<i data-lucide="${reveal ? "eye-off" : "eye"}"></i>`;
     refreshIcons(elements.tokenToggle);
   });
-  elements.clear.addEventListener("click", () => {
-    if (controller) controller.abort();
-    history = [];
-    writeStorage("history", history);
-    renderMessages();
-  });
   elements.send.addEventListener("click", sendMessage);
   elements.resizeHandle.addEventListener("pointerdown", startDrawerResize);
   elements.resizeHandle.addEventListener("pointermove", moveDrawerResize);
@@ -779,6 +1003,7 @@
     if (event.key === "Escape" && document.body.classList.contains("ai-open")) {
       if (!elements.settings.hidden) toggleSettings(false);
       else if (!elements.usage.hidden) toggleUsage(false);
+      else if (!elements.sessions.hidden) toggleSessions(false);
       else closeDrawer();
     }
   });
@@ -792,6 +1017,7 @@
   setMode(mode);
   renderMessages();
   renderUsage();
+  renderSessions();
   updateComposer();
   refreshIcons();
   if (config.backendUrl) checkHealth(false);
